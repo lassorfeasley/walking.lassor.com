@@ -1,0 +1,392 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
+import { format } from 'date-fns';
+import { PanoramaImage } from '@/types';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+
+// Dynamically import SearchBox to avoid SSR issues
+// SearchBox is the correct component for geocoding with coordinates
+const SearchBox = dynamic(
+  () => import('@mapbox/search-js-react').then((mod) => mod.SearchBox),
+  { 
+    ssr: false,
+    loading: () => <Input id="location" type="text" placeholder="Loading location search..." disabled />
+  }
+);
+
+interface ImageMetadataFormProps {
+  metadata: Partial<PanoramaImage>;
+  onChange: (metadata: Partial<PanoramaImage>) => void;
+  existingTags: string[];
+}
+
+export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMetadataFormProps) {
+  const [locationInput, setLocationInput] = useState(metadata.location_name || '');
+  const [tagInput, setTagInput] = useState((metadata.tags || []).join(', '));
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+
+  // Prefill with test data on mount
+  useEffect(() => {
+    if (!metadata.title && !metadata.location_name && !metadata.description && !metadata.date_taken) {
+      const today = new Date().toISOString().split('T')[0];
+      onChange({
+        title: 'Walking Forward Panorama',
+        location_name: 'San Francisco, CA',
+        latitude: 37.7749,
+        longitude: -122.4194,
+        description: 'A beautiful walking panorama capturing the essence of the city streets.',
+        date_taken: today,
+        tags: ['urban', 'city', 'walking'],
+        status: 'draft',
+      });
+      setLocationInput('San Francisco, CA');
+      setTagInput('urban, city, walking');
+    }
+  }, []);
+
+  // Update tag suggestions based on input
+  useEffect(() => {
+    if (tagInput.trim()) {
+      const inputTags = tagInput.split(',').map(t => t.trim().toLowerCase());
+      const lastTag = inputTags[inputTags.length - 1];
+      if (lastTag) {
+        const suggestions = existingTags
+          .filter(tag => tag.toLowerCase().startsWith(lastTag.toLowerCase()))
+          .filter(tag => !inputTags.includes(tag.toLowerCase()))
+          .slice(0, 5);
+        setTagSuggestions(suggestions);
+      } else {
+        setTagSuggestions([]);
+      }
+    } else {
+      setTagSuggestions([]);
+    }
+  }, [tagInput, existingTags]);
+
+  // Check if Mapbox token is available on mount
+  useEffect(() => {
+    const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+    console.log('🗺️ Mapbox SearchBox component mounted');
+    console.log('🗺️ Mapbox token available:', !!token);
+    console.log('🗺️ Mapbox token length:', token?.length || 0);
+  }, []);
+
+  // Sync locationInput when metadata.location_name changes externally
+  useEffect(() => {
+    if (metadata.location_name && metadata.location_name !== locationInput) {
+      setLocationInput(metadata.location_name);
+    }
+  }, [metadata.location_name]);
+
+  // Update map preview when coordinates change
+  useEffect(() => {
+    if (metadata.latitude && metadata.longitude && mapContainerRef.current) {
+      // Simple static map preview using Mapbox Static Images API
+      const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+      if (mapboxToken) {
+        const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+ff0000(${metadata.longitude},${metadata.latitude})/${metadata.longitude},${metadata.latitude},12,0/300x200@2x?access_token=${mapboxToken}`;
+        if (mapContainerRef.current) {
+          mapContainerRef.current.innerHTML = `<img src="${mapUrl}" alt="Location map" className="w-full h-full object-cover rounded-md" />`;
+        }
+      }
+    }
+  }, [metadata.latitude, metadata.longitude]);
+
+  const handleLocationRetrieve = (retrieveResponse: any) => {
+    console.log('Location retrieve response received:', retrieveResponse);
+    console.log('Full response structure:', JSON.stringify(retrieveResponse, null, 2));
+    
+    // Handle different response formats from AddressAutofill retrieve
+    // The retrieve response should be a FeatureCollection
+    let feature = null;
+    let coordinates: number[] = [];
+    let locationName = '';
+    
+    // The retrieve response should be a FeatureCollection
+    // Check if it's directly a FeatureCollection
+    if (retrieveResponse?.type === 'FeatureCollection' && retrieveResponse?.features && retrieveResponse.features.length > 0) {
+      feature = retrieveResponse.features[0];
+    } 
+    // Check if it's wrapped in a response object
+    else if (retrieveResponse?.features && Array.isArray(retrieveResponse.features) && retrieveResponse.features.length > 0) {
+      feature = retrieveResponse.features[0];
+    }
+    // Check if it has a feature property (single feature response)
+    else if (retrieveResponse?.feature) {
+      feature = retrieveResponse.feature;
+    } 
+    // Check if it's already a feature
+    else if (retrieveResponse?.geometry || retrieveResponse?.properties || retrieveResponse?.center) {
+      feature = retrieveResponse;
+    }
+    // Check if it's wrapped in a suggestion object
+    else if (retrieveResponse?.suggestion) {
+      const suggestion = retrieveResponse.suggestion;
+      if (suggestion.feature) {
+        feature = suggestion.feature;
+      } else if (suggestion.geometry || suggestion.properties || suggestion.center) {
+        feature = suggestion;
+      }
+    }
+    
+    // Extract from feature if we have one
+    if (feature) {
+      const properties = feature.properties || {};
+      const geometry = feature.geometry;
+      
+      // Extract location name - try multiple possible property names
+      locationName = properties.full_address || 
+                    properties.place_name || 
+                    properties.name || 
+                    properties.text ||
+                    properties.address ||
+                    feature.place_name ||
+                    feature.name ||
+                    '';
+      
+      // Extract coordinates - Mapbox can provide them in different ways:
+      // 1. geometry.coordinates (for Point geometry) - [lng, lat]
+      // 2. center property (common in Mapbox responses) - [lng, lat]
+      // 3. geometry.coordinates for other geometry types
+      
+      // First, try the center property (most common in Mapbox Search API)
+      if (feature.center && Array.isArray(feature.center) && feature.center.length >= 2) {
+        coordinates = feature.center;
+        console.log('✅ Using center property:', coordinates);
+      }
+      // Then try geometry.coordinates
+      else if (geometry?.coordinates && Array.isArray(geometry.coordinates)) {
+        // For Point geometry, coordinates is [lng, lat]
+        if (geometry.type === 'Point' && geometry.coordinates.length >= 2) {
+          coordinates = geometry.coordinates;
+          console.log('✅ Using Point geometry coordinates:', coordinates);
+        } else if (geometry.coordinates[0] && Array.isArray(geometry.coordinates[0])) {
+          // Multi-point or polygon - take first coordinate
+          coordinates = geometry.coordinates[0];
+          console.log('✅ Using first coordinate from multi-point geometry:', coordinates);
+        } else {
+          coordinates = geometry.coordinates;
+          console.log('✅ Using geometry coordinates:', coordinates);
+        }
+      } 
+      // Try properties.center as fallback
+      else if (properties.center && Array.isArray(properties.center) && properties.center.length >= 2) {
+        coordinates = properties.center;
+        console.log('✅ Using properties.center:', coordinates);
+      }
+      // Last resort: try lng/lat properties
+      else if (geometry?.lng !== undefined && geometry?.lat !== undefined) {
+        coordinates = [geometry.lng, geometry.lat];
+        console.log('✅ Using geometry lng/lat:', coordinates);
+      }
+      
+      console.log('📊 Extracted from feature:', {
+        locationName,
+        coordinates,
+        geometryType: geometry?.type,
+        hasProperties: !!properties,
+        hasGeometry: !!geometry,
+        hasCenter: !!feature.center
+      });
+    }
+    
+    // Parse coordinates
+    const [lng, lat] = coordinates.length >= 2 ? coordinates : [0, 0];
+    
+    // Validate coordinates (check if they're valid lat/lng values)
+    const isValidLat = lat >= -90 && lat <= 90;
+    const isValidLng = lng >= -180 && lng <= 180;
+    
+    if (!isValidLat || !isValidLng || (lat === 0 && lng === 0)) {
+      console.warn('❌ Could not extract valid coordinates from retrieve response:', {
+        retrieveResponse,
+        feature,
+        coordinates,
+        locationName,
+        isValidLat,
+        isValidLng
+      });
+      return;
+    }
+    
+    // Get the location name from the input field (AddressAutofill should have filled it)
+    const inputElement = document.getElementById('location') as HTMLInputElement;
+    const inputValue = inputElement?.value || locationName || locationInput;
+    
+    // Update state
+    setLocationInput(inputValue);
+    
+    onChange({
+      ...metadata,
+      location_name: inputValue,
+      latitude: lat,
+      longitude: lng,
+    });
+    
+    console.log('🎉 Location successfully updated:', {
+      locationName: inputValue,
+      latitude: lat,
+      longitude: lng
+    });
+  };
+
+  const handleTagChange = (value: string) => {
+    setTagInput(value);
+    const tags = value
+      .split(',')
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
+    onChange({
+      ...metadata,
+      tags,
+    });
+  };
+
+  const handleTagSuggestionClick = (suggestion: string) => {
+    const currentTags = tagInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    const lastTagIndex = tagInput.lastIndexOf(',');
+    const beforeLastTag = lastTagIndex >= 0 ? tagInput.substring(0, lastTagIndex + 1) : '';
+    const newTagInput = beforeLastTag + (beforeLastTag ? ' ' : '') + suggestion;
+    handleTagChange(newTagInput);
+    setTagSuggestions([]);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Image Metadata</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Location Section */}
+        <div className="space-y-3">
+          <Label htmlFor="location">Location *</Label>
+          <div className="space-y-2">
+            <SearchBox
+              accessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''}
+              onRetrieve={(retrieveResponse) => {
+                try {
+                  console.log('✅✅✅ SearchBox onRetrieve callback fired! ✅✅✅');
+                  console.log('Retrieve response:', retrieveResponse);
+                  console.log('Response type:', typeof retrieveResponse);
+                  console.log('Response keys:', retrieveResponse ? Object.keys(retrieveResponse) : 'null');
+                  console.log('Full response JSON:', JSON.stringify(retrieveResponse, null, 2));
+                  handleLocationRetrieve(retrieveResponse);
+                } catch (error) {
+                  console.error('❌ Error in onRetrieve callback:', error);
+                }
+              }}
+              placeholder="Search for a location..."
+              options={{
+                language: 'en',
+                country: 'US',
+              }}
+            />
+            {metadata.latitude && metadata.longitude && (
+              <div className="h-48 w-full rounded-md overflow-hidden border border-border bg-muted">
+                <div ref={mapContainerRef} className="w-full h-full" />
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground">
+              Coordinates: {metadata.latitude?.toFixed(4)}, {metadata.longitude?.toFixed(4)}
+            </div>
+          </div>
+        </div>
+
+        {/* Title Section */}
+        <div className="space-y-2">
+          <Label htmlFor="title">Title *</Label>
+          <Input
+            id="title"
+            type="text"
+            placeholder="Enter a title for this image..."
+            value={metadata.title || ''}
+            onChange={(e) => onChange({ ...metadata, title: e.target.value })}
+            required
+          />
+        </div>
+
+        {/* Description Section */}
+        <div className="space-y-2">
+          <Label htmlFor="description">Description (Instagram Caption) *</Label>
+          <Textarea
+            id="description"
+            placeholder="Enter a description for this image..."
+            value={metadata.description || ''}
+            onChange={(e) => onChange({ ...metadata, description: e.target.value })}
+            rows={4}
+            required
+          />
+        </div>
+
+        {/* Date Taken Section */}
+        <div className="space-y-2">
+          <Label htmlFor="date_taken">Date Taken *</Label>
+          <Input
+            id="date_taken"
+            type="date"
+            value={metadata.date_taken || new Date().toISOString().split('T')[0]}
+            onChange={(e) => onChange({ ...metadata, date_taken: e.target.value })}
+            required
+          />
+        </div>
+
+        {/* Tags Section */}
+        <div className="space-y-2">
+          <Label htmlFor="tags">Tags (comma-separated) *</Label>
+          <div className="relative">
+            <Input
+              id="tags"
+              type="text"
+              placeholder="urban, city, walking..."
+              value={tagInput}
+              onChange={(e) => handleTagChange(e.target.value)}
+              required
+            />
+            {tagSuggestions.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg">
+                {tagSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => handleTagSuggestionClick(suggestion)}
+                    className="w-full text-left px-3 py-2 hover:bg-accent hover:text-accent-foreground text-sm"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {metadata.tags?.length || 0} tag(s) added
+          </div>
+        </div>
+
+        {/* Status Section */}
+        <div className="space-y-2">
+          <Label htmlFor="status">Status *</Label>
+          <Select
+            id="status"
+            value={metadata.status || 'draft'}
+            onChange={(e) => onChange({ ...metadata, status: e.target.value as PanoramaImage['status'] })}
+            required
+          >
+            <option value="draft">Draft</option>
+            <option value="ready">Ready</option>
+            <option value="posted">Posted</option>
+            <option value="private">Private</option>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
