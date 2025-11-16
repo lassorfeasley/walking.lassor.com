@@ -132,31 +132,31 @@ export default function Home() {
                   </div>
 
                   {/* Image Container */}
-                  <div className="w-full h-40 relative overflow-hidden">
+                  <div className="w-full relative flex items-center justify-center bg-white">
                     {variant === 'Default' && (
                       <img
-                        className="w-full h-40 object-cover"
+                        className="w-full h-auto object-contain"
                         src={imageUrl}
                         alt={image.title || image.description || 'Panorama image'}
                       />
                     )}
                     {variant === 'Variant2' && (
-                      <>
+                      <div className="w-full relative">
                         <img
-                          className="w-full h-40 object-cover absolute inset-0"
+                          className="w-full h-auto object-contain relative z-10"
                           src={imageUrl}
                           alt={image.title || image.description || 'Panorama image'}
                         />
                         <img
-                          className="w-full h-40 object-cover absolute inset-0 opacity-50"
+                          className="w-full h-auto object-contain absolute top-0 left-0 opacity-50"
                           src={imageUrl}
                           alt={image.title || image.description || 'Panorama image'}
                         />
-                      </>
+                      </div>
                     )}
                     {variant === 'Variant3' && (
                       <img
-                        className="w-[calc(100%+8px)] h-40 object-cover absolute left-[-4px] top-0"
+                        className="w-[calc(100%+8px)] h-auto object-contain -mx-1"
                         src={imageUrl}
                         alt={image.title || image.description || 'Panorama image'}
                       />

@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText, Download, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { getImageMetadata, getPanelsByImageId } from '@/lib/supabase/database';
+import { getImageMetadata, getPanelsByImageId, deleteImage } from '@/lib/supabase/database';
 import { useEffect, useState } from 'react';
 import { PanoramaImage, PanoramaPanel } from '@/types';
+import JSZip from 'jszip';
 
 export default function PanoramaDetailPage({
   params,
@@ -22,6 +23,76 @@ export default function PanoramaDetailPage({
   const [panels, setPanels] = useState<PanoramaPanel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!image) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${image.title || 'this panorama'}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const success = await deleteImage(image.id);
+      if (success) {
+        // Redirect to library after successful deletion
+        router.push('/library');
+      } else {
+        alert('Failed to delete panorama. Please try again.');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete panorama. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    if (!image) return;
+
+    setIsDownloading(true);
+    try {
+      const zip = new JSZip();
+      const timestamp = Date.now();
+
+      // Download processed image and add to zip
+      if (image.processed_url) {
+        const response = await fetch(image.processed_url);
+        const blob = await response.blob();
+        zip.file(`processed-${timestamp}.jpg`, blob);
+      }
+
+      // Download all panel images and add to zip
+      if (panels.length > 0) {
+        for (const panel of panels) {
+          const response = await fetch(panel.panel_url);
+          const blob = await response.blob();
+          zip.file(`panel-${panel.panel_order}-${timestamp}.jpg`, blob);
+        }
+      }
+
+      // Generate and download the zip file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `walking-forward-${image.title?.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'panorama'}-${timestamp}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download images. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   useEffect(() => {
     const loadImage = async () => {
@@ -272,6 +343,15 @@ export default function PanoramaDetailPage({
                 <Button
                   variant="outline"
                   className="w-full"
+                  onClick={handleDownloadZip}
+                  disabled={isDownloading || (!image.processed_url && panels.length === 0)}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {isDownloading ? 'Downloading...' : 'Download Zip'}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
                   onClick={() => window.open(image.original_url, '_blank')}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
@@ -287,6 +367,17 @@ export default function PanoramaDetailPage({
                     Open Processed
                   </Button>
                 )}
+                <div className="border-t border-border mt-2 pt-2">
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {isDeleting ? 'Deleting...' : 'Delete Panorama'}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -67,7 +67,14 @@ export default function UploadPage() {
       </div>
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Upload Panorama</h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-3xl font-bold">Upload Panorama</h1>
+          <Link href="/upload/legacy">
+            <Button variant="outline" size="sm">
+              Legacy Upload
+            </Button>
+          </Link>
+        </div>
         <p className="text-muted-foreground">
           Upload your panorama image to get started
         </p>

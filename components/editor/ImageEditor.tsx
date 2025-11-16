@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
-import { Download, RotateCw, Instagram, ChevronDown, ChevronUp } from 'lucide-react';
+import { RotateCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, generatePanelImages } from '@/lib/image-processing/utils';
 import { uploadFile, PROCESSED_BUCKET } from '@/lib/supabase/storage';
 import { saveImageMetadata, getImageMetadata, getImageByUrl, getAllTags, savePanels } from '@/lib/supabase/database';
@@ -27,7 +27,6 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const [rotation, setRotation] = useState(0);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   const [panelCount, setPanelCount] = useState<number>(3);
-  const [usePanels, setUsePanels] = useState(true);
   const [filters, setFilters] = useState({
     brightness: 100,
     contrast: 100,
@@ -79,7 +78,6 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const previewUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const aspectRatioValue = useCallback(() => {
-    if (!usePanels) return undefined;
     // Calculate aspect ratio for the image strip area (excluding white blocks)
     const panelHeight = 1080;
     const blockRatio = 0.1685;
@@ -88,7 +86,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     const imageStripWidth = panelCount * panelHeight;
     // Return width/height ratio for the image strip area
     return imageStripWidth / imageStripHeight;
-  }, [panelCount, usePanels]);
+  }, [panelCount]);
 
   // Calculate initial zoom so image fills the full width of the panels
   // react-easy-crop's zoom is relative to the "fit" size (zoom = 1.0 means fit to container)
@@ -289,7 +287,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
   // Set initial zoom after image loads and component is ready
   useEffect(() => {
-    if (imageRef.current && imageRef.current.complete && !initialZoomSet && usePanels) {
+    if (imageRef.current && imageRef.current.complete && !initialZoomSet) {
       const img = imageRef.current;
       const zoomValue = calculateInitialZoom(
         img.naturalWidth,
@@ -309,11 +307,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       }, 150);
       setInitialZoomSet(true);
     }
-  }, [imageRef.current?.complete, calculateInitialZoom, panelCount, rotation, usePanels, initialZoomSet]);
+  }, [imageRef.current?.complete, calculateInitialZoom, panelCount, rotation, initialZoomSet]);
 
   // Recalculate zoom when panelCount changes (but not when rotation changes manually)
   useEffect(() => {
-    if (imageRef.current && usePanels && initialZoomSet && prevPanelCountRef.current !== panelCount) {
+    if (imageRef.current && initialZoomSet && prevPanelCountRef.current !== panelCount) {
       // Only recalculate when panelCount actually changes
       const zoomValue = calculateInitialZoom(
         imageRef.current.naturalWidth,
@@ -325,7 +323,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       zoomRef.current = zoomValue;
       prevPanelCountRef.current = panelCount;
     }
-  }, [panelCount, calculateInitialZoom, rotation, usePanels, initialZoomSet]);
+  }, [panelCount, calculateInitialZoom, rotation, initialZoomSet]);
 
   // Load existing metadata and tags
   useEffect(() => {
@@ -467,9 +465,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           filteredImg.onload = resolve;
         });
 
-        const outputDimensions = usePanels
-          ? getPanelDimensions(panelCount, 1080)
-          : undefined;
+        const outputDimensions = getPanelDimensions(panelCount, 1080);
 
         const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, outputDimensions);
         const timestamp = Date.now();
@@ -486,9 +482,9 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         }
       }
 
-      // Generate and save panels if using panels
+      // Generate and save panels
       let panelUrls: Array<{ panel_order: number; panel_url: string }> = [];
-      if (usePanels && croppedAreaPixels && imageRef.current && processedUrl) {
+      if (croppedAreaPixels && imageRef.current && processedUrl) {
         // Load the processed image to extract panels from
         const processedImg = new Image();
         processedImg.crossOrigin = 'anonymous';
@@ -525,7 +521,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       const imageData: Partial<PanoramaImage> = {
         original_url: imageUrl,
         processed_url: processedUrl,
-        panel_count: usePanels ? panelCount : undefined,
+        panel_count: panelCount,
         title: metadata.title!,
         location_name: metadata.location_name!,
         latitude: metadata.latitude!,
@@ -564,7 +560,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [metadata, imageUrl, imageId, croppedAreaPixels, filters, panelCount, usePanels, selectiveColor, onSave, imageRef]);
+  }, [metadata, imageUrl, imageId, croppedAreaPixels, filters, panelCount, selectiveColor, onSave, imageRef]);
 
   const handleExportAndDownload = useCallback(async () => {
     if (!imageRef.current || !croppedAreaPixels) return;
@@ -650,9 +646,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       });
 
       // Calculate output dimensions based on panel count
-      const outputDimensions = usePanels
-        ? getPanelDimensions(panelCount, 1080)
-        : undefined;
+      const outputDimensions = getPanelDimensions(panelCount, 1080);
 
       // Crop the image
       const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, outputDimensions);
@@ -669,10 +663,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       // Create zip file with images
       const zip = new JSZip();
       const timestamp = Date.now();
-      const panelHeight = usePanels ? 1080 : croppedImg.height; // fallback to image height if free crop
+      const panelHeight = 1080;
       let combinedBlob: Blob;
-
-      if (usePanels) {
         // Split into individual panels FIRST (before adding white blocks)
         const panelWidth = croppedImg.width / panelCount;
         const panelHeightPx = croppedImg.height; // This is the image strip height (without white blocks)
@@ -838,11 +830,6 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
             URL.revokeObjectURL(img.src);
           }
         });
-      } else {
-        // Free crop mode - just add white blocks and add to zip
-        combinedBlob = await addWhiteBlocks(croppedImg, panelHeight, 0.1685);
-        zip.file(`combined-${timestamp}.jpg`, combinedBlob);
-      }
 
       // Clean up object URL
       URL.revokeObjectURL(croppedImg.src);
@@ -878,7 +865,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [croppedAreaPixels, filters, panelCount, usePanels, selectiveColor]);
+  }, [croppedAreaPixels, filters, panelCount, selectiveColor]);
 
   return (
     <div className="space-y-6">
@@ -888,68 +875,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         </CardHeader>
         <CardContent>
           <div className="flex gap-6">
-            {/* Left side: Panel selector and Image editor */}
+            {/* Left side: Image editor */}
             <div className="flex-1 space-y-6">
-              {/* Panel Count Selector */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Panels</label>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">Free crop</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={usePanels}
-                      onClick={() => setUsePanels(!usePanels)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                        usePanels ? 'bg-primary' : 'bg-muted'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          usePanels ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-                {usePanels ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-4">
-                      <Slider
-                        value={[panelCount]}
-                        onValueChange={(value) => setPanelCount(value[0])}
-                        min={1}
-                        max={10}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <Input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={panelCount}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value, 10);
-                          if (!isNaN(value) && value >= 1 && value <= 10) {
-                            setPanelCount(value);
-                          }
-                        }}
-                        className="w-20"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {panelCount} panel{panelCount !== 1 ? 's' : ''} ({panelCount}:1 aspect ratio)
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Free crop mode - no aspect ratio constraints</p>
-                )}
-              </div>
-
               {/* Unified Editor/Preview: Shows final export with white padding and panel dividers */}
-              <div className="relative w-full bg-white rounded-lg overflow-hidden border border-border shadow-sm">
-            {usePanels ? (() => {
+              <div className="relative w-full bg-white rounded-lg overflow-hidden border border-border shadow-sm sticky top-6">
+            {(() => {
               // Calculate dimensions - each panel is a square with white blocks inside
               const panelHeight = 1080;
               const blockRatio = 0.1685; // 16.85% of panel height
@@ -1067,67 +997,46 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                   ))}
                 </div>
               );
-            })() : (
-              // Free crop mode - no white padding or panel dividers
-              <div className="relative w-full" style={{ minHeight: '400px' }}>
-                <img
-                  ref={imageRef}
-                  src={imageUrl}
-                  alt="Editor"
-                  className="hidden"
-                  crossOrigin="anonymous"
-                  onLoad={handleImageLoad}
-                  onError={(e) => {
-                    console.error('Failed to load image:', e);
-                  }}
-                />
-                <div
-                  className="relative"
-                  style={{
-                    filter: filteredPreviewUrl ? 'none' : `brightness(${Math.max(0, filters.brightness + filters.exposure)}%) contrast(${filters.contrast}%) saturate(${filters.saturation}%)`,
-                    opacity: isUpdatingPreview ? 0.7 : 1,
-                    transition: 'opacity 0.2s ease-in-out'
-                  }}
-                >
-                  <Cropper
-                    image={filteredPreviewUrl || imageUrl}
-                    crop={crop}
-                    zoom={zoom}
-                    rotation={rotation}
-                    aspect={aspectRatioValue()}
-                    onCropChange={onCropChange}
-                    onZoomChange={(newZoom) => {
-                      setZoom(newZoom);
-                      zoomRef.current = newZoom;
-                    }}
-                    onRotationChange={setRotation}
-                    onCropComplete={onCropComplete}
-                    cropShape="rect"
-                  />
-                  {/* Loading indicator overlay */}
-                  {isUpdatingPreview && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/5 pointer-events-none z-20">
-                      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            })()}
             </div>
-
-            {/* Metadata Form */}
-            {!isLoadingMetadata && (
-              <ImageMetadataForm
-                metadata={metadata}
-                onChange={setMetadata}
-                existingTags={existingTags}
-              />
-            )}
             </div>
 
             {/* Right sidebar: All controls */}
             <div className="w-80 space-y-5 flex-shrink-0">
               <div className="sticky top-6 space-y-5">
+            {/* Panel Count Selector */}
+            <div className="space-y-3 pb-5 border-b border-border">
+              <label className="text-sm font-medium">Panels</label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[panelCount]}
+                    onValueChange={(value) => setPanelCount(value[0])}
+                    min={1}
+                    max={10}
+                    step={1}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={panelCount}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value, 10);
+                      if (!isNaN(value) && value >= 1 && value <= 10) {
+                        setPanelCount(value);
+                      }
+                    }}
+                    className="w-20"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {panelCount} panel{panelCount !== 1 ? 's' : ''} ({panelCount}:1 aspect ratio)
+                </p>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Zoom: {Math.round(zoom * 100)}%
@@ -1369,39 +1278,31 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 </div>
               )}
             </div>
+
+            {/* Metadata Form */}
+            <div className="pt-5 border-t border-border">
+              {!isLoadingMetadata && (
+                <ImageMetadataForm
+                  metadata={metadata}
+                  onChange={setMetadata}
+                  existingTags={existingTags}
+                />
+              )}
+            </div>
+
+            {/* Save Button */}
+            <div className="pt-5 border-t border-border">
+              <Button
+                onClick={handleSave}
+                disabled={isProcessing}
+                className="w-full"
+                size="lg"
+              >
+                {isProcessing ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
               </div>
             </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-6 border-t border-border mt-6">
-            <Button
-              onClick={handleSave}
-              disabled={isProcessing}
-              className="flex-1"
-              size="lg"
-            >
-              {isProcessing ? 'Saving...' : 'Save'}
-            </Button>
-            <Button
-              onClick={handleExportAndDownload}
-              variant="outline"
-              disabled={isProcessing}
-              className="flex-1"
-              size="lg"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Export & Download
-            </Button>
-            <Button
-              variant="outline"
-              disabled={isProcessing}
-              className="flex-1"
-              size="lg"
-            >
-              <Instagram className="mr-2 h-4 w-4" />
-              Post to Instagram
-            </Button>
           </div>
         </CardContent>
       </Card>
