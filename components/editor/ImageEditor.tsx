@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { RotateCw, ChevronDown, ChevronUp } from 'lucide-react';
-import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, generatePanelImages } from '@/lib/image-processing/utils';
-import { uploadFile, PROCESSED_BUCKET } from '@/lib/supabase/storage';
+import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
+import { uploadFile, PROCESSED_BUCKET, OPTIMIZED_BUCKET } from '@/lib/supabase/storage';
 import { saveImageMetadata, getImageMetadata, getImageByUrl, getAllTags, savePanels } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 import { ImageMetadataForm } from './ImageMetadataForm';
@@ -396,6 +396,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     try {
       // First, export the processed image if needed
       let processedUrl = imageUrl;
+      let thumbnailUrl: string | undefined;
+      let previewUrl: string | undefined;
       
       if (croppedAreaPixels && imageRef.current) {
         // Process and upload the image
@@ -469,16 +471,54 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
         const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, outputDimensions);
         const timestamp = Date.now();
-        const file = new File([croppedBlob], `processed-${timestamp}.jpg`, {
-          type: 'image/jpeg',
+        
+        // Save processed version as PNG (lossless) for print quality
+        const processedFile = new File([croppedBlob], `processed-${timestamp}.png`, {
+          type: 'image/png',
         });
 
-        const result = await uploadFile(file, {
+        const result = await uploadFile(processedFile, {
           bucket: PROCESSED_BUCKET,
         });
 
         if (result) {
           processedUrl = result.url;
+          
+          // Load the processed image for generating optimized versions
+          const processedImg = new Image();
+          processedImg.crossOrigin = 'anonymous';
+          processedImg.src = result.url;
+          
+          await new Promise((resolve, reject) => {
+            processedImg.onload = resolve;
+            processedImg.onerror = reject;
+          });
+          
+          // Generate and upload thumbnail (400px, quality 0.80)
+          const thumbnailBlob = await generateWebOptimized(processedImg, 400, 0.80);
+          const thumbnailFile = new File([thumbnailBlob], `thumb-${timestamp}.jpg`, {
+            type: 'image/jpeg',
+          });
+          const thumbnailResult = await uploadFile(thumbnailFile, {
+            bucket: OPTIMIZED_BUCKET,
+            folder: 'thumbnails',
+          });
+          if (thumbnailResult) {
+            thumbnailUrl = thumbnailResult.url;
+          }
+          
+          // Generate and upload preview (1920px, quality 0.85)
+          const previewBlob = await generateWebOptimized(processedImg, 1920, 0.85);
+          const previewFile = new File([previewBlob], `preview-${timestamp}.jpg`, {
+            type: 'image/jpeg',
+          });
+          const previewResult = await uploadFile(previewFile, {
+            bucket: OPTIMIZED_BUCKET,
+            folder: 'previews',
+          });
+          if (previewResult) {
+            previewUrl = previewResult.url;
+          }
         }
       }
 
@@ -521,6 +561,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       const imageData: Partial<PanoramaImage> = {
         original_url: imageUrl,
         processed_url: processedUrl,
+        thumbnail_url: thumbnailUrl,
+        preview_url: previewUrl,
         panel_count: panelCount,
         title: metadata.title!,
         location_name: metadata.location_name!,

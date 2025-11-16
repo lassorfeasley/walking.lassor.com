@@ -2,6 +2,7 @@ import { supabase } from './client';
 
 const RAW_BUCKET = process.env.NEXT_PUBLIC_STORAGE_BUCKET_RAW || 'raw-panoramas';
 const PROCESSED_BUCKET = process.env.NEXT_PUBLIC_STORAGE_BUCKET_PROCESSED || 'processed-images';
+const OPTIMIZED_BUCKET = process.env.NEXT_PUBLIC_STORAGE_BUCKET_OPTIMIZED || 'optimized-web';
 
 export interface UploadOptions {
   bucket?: string;
@@ -75,5 +76,5 @@ export async function listFiles(bucket?: string, folder?: string): Promise<strin
   return data.map((file) => file.name);
 }
 
-export { RAW_BUCKET, PROCESSED_BUCKET };
+export { RAW_BUCKET, PROCESSED_BUCKET, OPTIMIZED_BUCKET };
 

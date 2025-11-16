@@ -115,7 +115,7 @@ export default function LibraryPage() {
               <CardContent className="p-0">
                 <div className="relative aspect-square w-full overflow-hidden bg-muted">
                   <Image
-                    src={image.processed_url || image.original_url}
+                    src={image.thumbnail_url || image.processed_url || image.original_url}
                     alt={image.title || image.description || 'Panorama image'}
                     fill
                     className="object-cover transition-transform group-hover:scale-105"

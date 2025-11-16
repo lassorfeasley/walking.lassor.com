@@ -3,6 +3,8 @@ export interface PanoramaImage {
   id: string;
   original_url: string;
   processed_url?: string;
+  thumbnail_url?: string; // 400px, quality 0.80 - for grid views
+  preview_url?: string; // 1920px, quality 0.85 - for detail views
   panel_count?: number;
   title: string;
   location_name: string;

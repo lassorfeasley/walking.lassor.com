@@ -415,6 +415,55 @@ export function applySelectiveColor(
 }
 
 /**
+ * Generate web-optimized version of an image
+ * @param image The image element
+ * @param maxWidth Maximum width in pixels
+ * @param quality JPEG quality (0-1)
+ * @returns Promise that resolves to a Blob
+ */
+export function generateWebOptimized(
+  image: HTMLImageElement,
+  maxWidth: number,
+  quality: number = 0.85
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      reject(new Error('Could not get canvas context'));
+      return;
+    }
+
+    // Calculate dimensions maintaining aspect ratio
+    let width = image.naturalWidth;
+    let height = image.naturalHeight;
+    
+    if (width > maxWidth) {
+      height = (height * maxWidth) / width;
+      width = maxWidth;
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+
+    ctx.drawImage(image, 0, 0, width, height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('Failed to create blob'));
+        }
+      },
+      'image/jpeg',
+      quality
+    );
+  });
+}
+
+/**
  * Add white blocks (letterbox padding) to the top and bottom of an image
  * @param image The image to add white blocks to
  * @param panelHeight The height of one square panel (used to calculate block height)

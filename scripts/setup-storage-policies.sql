@@ -23,6 +23,17 @@ ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'processed-images');
 
+-- Policy for optimized-web bucket: Allow public uploads and reads
+CREATE POLICY "Allow public uploads to optimized-web"
+ON storage.objects FOR INSERT
+TO public
+WITH CHECK (bucket_id = 'optimized-web');
+
+CREATE POLICY "Allow public reads from optimized-web"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'optimized-web');
+
 -- Optional: Allow updates and deletes (uncomment if needed)
 -- CREATE POLICY "Allow public updates to raw-panoramas"
 -- ON storage.objects FOR UPDATE

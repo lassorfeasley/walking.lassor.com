@@ -39,7 +39,7 @@ export function ImageGrid({ images }: ImageGridProps) {
             <CardContent className="p-0">
               <div className="relative aspect-square w-full overflow-hidden bg-muted">
                 <Image
-                  src={image.processed_url || image.original_url}
+                  src={image.thumbnail_url || image.processed_url || image.original_url}
                   alt={image.title || image.description || 'Panorama image'}
                   fill
                   className="object-cover transition-transform group-hover:scale-105"
@@ -68,7 +68,7 @@ export function ImageGrid({ images }: ImageGridProps) {
             <div className="space-y-4">
               <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
                 <Image
-                  src={selectedImage.processed_url || selectedImage.original_url}
+                  src={selectedImage.preview_url || selectedImage.processed_url || selectedImage.original_url}
                   alt={selectedImage.title || selectedImage.description || 'Panorama image'}
                   fill
                   className="object-contain"

@@ -164,7 +164,7 @@ export default function PanoramaDetailPage({
               <CardContent className="p-0">
                 <div className="relative w-full aspect-video overflow-hidden rounded-b-lg bg-muted">
                   <Image
-                    src={image.processed_url}
+                    src={image.preview_url || image.processed_url}
                     alt={`${image.title || 'Panorama'} - Processed`}
                     fill
                     className="object-contain"
@@ -349,24 +349,56 @@ export default function PanoramaDetailPage({
                   <Download className="mr-2 h-4 w-4" />
                   {isDownloading ? 'Downloading...' : 'Download Zip'}
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => window.open(image.original_url, '_blank')}
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Open Original
-                </Button>
-                {image.processed_url && (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => window.open(image.processed_url!, '_blank')}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Open Processed
-                  </Button>
-                )}
+                
+                {/* Download Quality Tiers Section */}
+                <div className="border-t border-border pt-3 mt-1">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Download Quality Tiers</p>
+                  <div className="flex flex-col gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start text-xs h-8"
+                      onClick={() => window.open(image.original_url, '_blank')}
+                    >
+                      <Download className="mr-2 h-3 w-3" />
+                      Original (Unedited)
+                    </Button>
+                    {image.processed_url && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start text-xs h-8"
+                        onClick={() => window.open(image.processed_url!, '_blank')}
+                      >
+                        <Download className="mr-2 h-3 w-3" />
+                        Processed (PNG Lossless)
+                      </Button>
+                    )}
+                    {image.preview_url && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start text-xs h-8"
+                        onClick={() => window.open(image.preview_url!, '_blank')}
+                      >
+                        <Download className="mr-2 h-3 w-3" />
+                        Preview (1920px JPEG)
+                      </Button>
+                    )}
+                    {image.thumbnail_url && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start text-xs h-8"
+                        onClick={() => window.open(image.thumbnail_url!, '_blank')}
+                      >
+                        <Download className="mr-2 h-3 w-3" />
+                        Thumbnail (400px JPEG)
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
                 <div className="border-t border-border mt-2 pt-2">
                   <Button
                     variant="destructive"

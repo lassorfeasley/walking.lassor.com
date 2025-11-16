@@ -430,6 +430,22 @@ export async function deleteImage(imageId: string): Promise<boolean> {
       }
     }
 
+    // Add thumbnail URL
+    if (image.thumbnail_url) {
+      const extracted = extractStoragePath(image.thumbnail_url);
+      if (extracted) {
+        filesToDelete.push({ url: image.thumbnail_url, ...extracted });
+      }
+    }
+
+    // Add preview URL
+    if (image.preview_url) {
+      const extracted = extractStoragePath(image.preview_url);
+      if (extracted) {
+        filesToDelete.push({ url: image.preview_url, ...extracted });
+      }
+    }
+
     // Add all panel URLs
     for (const panel of panels) {
       if (panel.panel_url) {
