@@ -423,28 +423,44 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
           
           <div className="space-y-2">
             <Label htmlFor="location" className="text-xs text-muted-foreground">Address / Place</Label>
-            <SearchBox
-              accessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''}
-              onRetrieve={(retrieveResponse) => {
-                try {
-                  console.log('✅✅✅ SearchBox onRetrieve callback fired! ✅✅✅');
-                  console.log('Retrieve response:', retrieveResponse);
-                  console.log('Response type:', typeof retrieveResponse);
-                  console.log('Response keys:', retrieveResponse ? Object.keys(retrieveResponse) : 'null');
-                  console.log('Full response JSON:', JSON.stringify(retrieveResponse, null, 2));
-                  handleLocationRetrieve(retrieveResponse);
-                } catch (error) {
-                  console.error('❌ Error in onRetrieve callback:', error);
-                }
-              }}
-              placeholder="Search for a location..."
-              options={{
-                language: 'en',
-                country: selectedCountry,
-                types: 'address,poi,place,locality,neighborhood,district,postcode,region',
-                limit: 10,
-              }}
-            />
+            {process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ? (
+              <SearchBox
+                accessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
+                onRetrieve={(retrieveResponse) => {
+                  try {
+                    console.log('✅✅✅ SearchBox onRetrieve callback fired! ✅✅✅');
+                    console.log('Retrieve response:', retrieveResponse);
+                    console.log('Response type:', typeof retrieveResponse);
+                    console.log('Response keys:', retrieveResponse ? Object.keys(retrieveResponse) : 'null');
+                    console.log('Full response JSON:', JSON.stringify(retrieveResponse, null, 2));
+                    handleLocationRetrieve(retrieveResponse);
+                  } catch (error) {
+                    console.error('❌ Error in onRetrieve callback:', error);
+                  }
+                }}
+                placeholder="Search for a location..."
+                options={{
+                  language: 'en',
+                  country: selectedCountry,
+                  types: 'address,poi,place,locality,neighborhood,district,postcode,region',
+                  limit: 10,
+                }}
+              />
+            ) : (
+              <Input
+                id="location"
+                type="text"
+                placeholder="Enter location manually (e.g., San Francisco, CA)"
+                value={locationInput}
+                onChange={(e) => {
+                  setLocationInput(e.target.value);
+                  onChange({
+                    ...metadata,
+                    location_name: e.target.value,
+                  });
+                }}
+              />
+            )}
             {metadata.latitude && metadata.longitude && (
               <div className="h-48 w-full rounded-md overflow-hidden border border-border bg-muted">
                 <div ref={mapContainerRef} className="w-full h-full" />
