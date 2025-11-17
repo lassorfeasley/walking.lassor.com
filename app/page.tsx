@@ -115,7 +115,7 @@ export default function Home() {
                 <div
                   key={image.id}
                   className="w-full flex flex-col cursor-pointer hover:opacity-90 transition-opacity bg-white"
-                  onClick={() => router.push(`/library/${image.id}`)}
+                  onClick={() => router.push(`/panorama/${image.id}`)}
                 >
                   {/* Header with Title and Coordinates */}
                   <div className="w-full px-3 py-1 flex justify-between items-center min-h-[20px]">

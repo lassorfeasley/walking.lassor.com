@@ -469,7 +469,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
         // Crop to the exact area selected (Cropper already enforces correct aspect ratio)
         // Don't force output dimensions - it causes distortion
-        const croppedBlob = await cropImage(filteredImg, croppedAreaPixels);
+        // Use PNG for truly lossless quality (for archival and print quality)
+        const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, undefined, 'png');
         const timestamp = Date.now();
         
         // Save processed version as PNG (lossless) for print quality
