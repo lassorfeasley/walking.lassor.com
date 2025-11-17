@@ -102,7 +102,7 @@ export default function Home() {
             <p className="text-neutral-500 text-xs font-medium font-mono">No panoramas yet.</p>
           </div>
         ) : (
-          <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-px">
+          <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-x-px gap-y-[100px]">
             {images.map((image, index) => {
               const variant = getVariant(index);
               // Use optimized images for fast loading: preview for quality, thumbnail as fallback
