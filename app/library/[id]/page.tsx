@@ -71,6 +71,35 @@ export default function PanoramaDetailPage({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isGeneratingOptimized, setIsGeneratingOptimized] = useState(false);
 
+  // All hooks must be called before any conditional returns
+  useEffect(() => {
+    // Only load image if auth check is complete
+    if (isAuthLoading) return;
+
+    const loadImage = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getImageMetadata(id);
+        if (data) {
+          setImage(data);
+          // Load panels if they exist
+          const panelData = await getPanelsByImageId(id);
+          setPanels(panelData);
+        } else {
+          setError('Image not found');
+        }
+      } catch (err) {
+        console.error('Error loading image:', err);
+        setError('Failed to load image');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadImage();
+  }, [id, isAuthLoading]);
+
+  // Conditional rendering after all hooks
   if (isAuthLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -224,30 +253,6 @@ export default function PanoramaDetailPage({
       setIsDownloading(false);
     }
   };
-
-  useEffect(() => {
-    const loadImage = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getImageMetadata(id);
-        if (data) {
-          setImage(data);
-          // Load panels if they exist
-          const panelData = await getPanelsByImageId(id);
-          setPanels(panelData);
-        } else {
-          setError('Image not found');
-        }
-      } catch (err) {
-        console.error('Error loading image:', err);
-        setError('Failed to load image');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadImage();
-  }, [id]);
 
   if (isLoading) {
     return (

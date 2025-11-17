@@ -52,15 +52,26 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  if (isAuthLoading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  // All hooks must be called before any conditional returns
+  useEffect(() => {
+    // Only load images if auth check is complete
+    if (isAuthLoading) return;
+
+    const loadImages = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getAllImages();
+        setImages(data);
+      } catch (err) {
+        console.error('Error loading images:', err);
+        setError('Failed to load images');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadImages();
+  }, [isAuthLoading]);
 
   const handleDelete = async (imageId: string, imageTitle: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent navigation to detail page
@@ -88,22 +99,16 @@ export default function LibraryPage() {
     }
   };
 
-  useEffect(() => {
-    const loadImages = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getAllImages();
-        setImages(data);
-      } catch (err) {
-        console.error('Error loading images:', err);
-        setError('Failed to load images');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadImages();
-  }, []);
+  // Conditional rendering after all hooks
+  if (isAuthLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
