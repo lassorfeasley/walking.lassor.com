@@ -447,19 +447,24 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
                 }}
               />
             ) : (
-              <Input
-                id="location"
-                type="text"
-                placeholder="Enter location manually (e.g., San Francisco, CA)"
-                value={locationInput}
-                onChange={(e) => {
-                  setLocationInput(e.target.value);
-                  onChange({
-                    ...metadata,
-                    location_name: e.target.value,
-                  });
-                }}
-              />
+              <div className="space-y-1">
+                <Input
+                  id="location"
+                  type="text"
+                  placeholder="Enter location manually (e.g., San Francisco, CA)"
+                  value={locationInput}
+                  onChange={(e) => {
+                    setLocationInput(e.target.value);
+                    onChange({
+                      ...metadata,
+                      location_name: e.target.value,
+                    });
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  💡 Add <code className="text-xs bg-muted px-1 rounded">NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN</code> to enable location autocomplete
+                </p>
+              </div>
             )}
             {metadata.latitude && metadata.longitude && (
               <div className="h-48 w-full rounded-md overflow-hidden border border-border bg-muted">
