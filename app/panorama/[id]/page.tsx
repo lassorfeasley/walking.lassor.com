@@ -101,7 +101,8 @@ export default function PublicPanoramaPage({
     );
   }
 
-  const imageUrl = image.preview_url || image.processed_url || image.original_url;
+  // Use full-sized processed image, fallback to original if processed not available
+  const imageUrl = image.processed_url || image.original_url;
   const latDMS = toDMS(image.latitude, true);
   const lngDMS = toDMS(image.longitude, false);
   const dateFormatted = image.date_taken ? formatDateMonthYear(image.date_taken) : '';
@@ -135,9 +136,9 @@ export default function PublicPanoramaPage({
             </div>
           </div>
 
-          {/* Main Image */}
+          {/* Main Image - Full sized */}
           <img
-            className="self-stretch h-80 object-contain"
+            className="self-stretch w-full h-auto object-contain"
             src={imageUrl}
             alt={image.title || 'Panorama image'}
           />
