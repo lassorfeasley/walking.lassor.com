@@ -8,10 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Upload, X, ArrowUp, ArrowDown, Check } from 'lucide-react';
 import Link from 'next/link';
-import { uploadFile, PROCESSED_BUCKET, RAW_BUCKET } from '@/lib/supabase/storage';
+import { uploadFile, PROCESSED_BUCKET, RAW_BUCKET, OPTIMIZED_BUCKET } from '@/lib/supabase/storage';
 import { saveImageMetadata, savePanels, getAllTags } from '@/lib/supabase/database';
 import { ImageMetadataForm } from '@/components/editor/ImageMetadataForm';
-import { cropImage, generatePanelImages } from '@/lib/image-processing/utils';
+import { cropImage, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
 import type { PanoramaImage } from '@/types';
 
 interface UploadedFile {
@@ -247,7 +247,7 @@ export default function LegacyUploadPage() {
         }
       }
 
-      const croppedBlob = await cropImage(img, croppedAreaPixels);
+      const croppedBlob = await cropImage(img, croppedAreaPixels, undefined, 'jpeg', 0.95);
       const croppedFile = new File([croppedBlob], file.name, {
         type: file.type,
         lastModified: Date.now(),
@@ -417,6 +417,9 @@ export default function LegacyUploadPage() {
 
       // Upload processed (if provided) - use cropped version if available
       let processedUrl: string | undefined;
+      let thumbnailUrl: string | undefined;
+      let previewUrl: string | undefined;
+      
       if (processedFile) {
         const fileToUpload = processedFile.croppedFile || processedFile.file;
         if (fileToUpload) {
@@ -425,6 +428,44 @@ export default function LegacyUploadPage() {
           });
           if (processedResult) {
             processedUrl = processedResult.url;
+            
+            // Generate thumbnail and preview from processed image
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = processedResult.url;
+            
+            await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = reject;
+            });
+            
+            const timestamp = Date.now();
+            
+            // Generate and upload thumbnail (400px, quality 0.80)
+            const thumbnailBlob = await generateWebOptimized(img, 400, 0.80);
+            const thumbnailFile = new File([thumbnailBlob], `thumb-${timestamp}.jpg`, {
+              type: 'image/jpeg',
+            });
+            const thumbnailResult = await uploadFile(thumbnailFile, {
+              bucket: OPTIMIZED_BUCKET,
+              folder: 'thumbnails',
+            });
+            if (thumbnailResult) {
+              thumbnailUrl = thumbnailResult.url;
+            }
+            
+            // Generate and upload preview (1920px, quality 0.85)
+            const previewBlob = await generateWebOptimized(img, 1920, 0.85);
+            const previewFile = new File([previewBlob], `preview-${timestamp}.jpg`, {
+              type: 'image/jpeg',
+            });
+            const previewResult = await uploadFile(previewFile, {
+              bucket: OPTIMIZED_BUCKET,
+              folder: 'previews',
+            });
+            if (previewResult) {
+              previewUrl = previewResult.url;
+            }
           }
         }
       }
@@ -459,6 +500,8 @@ export default function LegacyUploadPage() {
         id: '', // Will be generated
         original_url: finalOriginalUrl, // Use processed as original if original not provided
         processed_url: processedUrl,
+        thumbnail_url: thumbnailUrl,
+        preview_url: previewUrl,
         title: metadata.title!,
         location_name: metadata.location_name!,
         latitude: metadata.latitude!,

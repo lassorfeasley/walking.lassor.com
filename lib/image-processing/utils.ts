@@ -35,12 +35,16 @@ export function getPanelDimensions(
  * @param image The image element to crop
  * @param cropArea The crop area in pixels
  * @param outputDimensions Optional output dimensions (if different from crop area)
+ * @param format Output format: 'png' for lossless or 'jpeg' for compressed (default: 'png')
+ * @param quality JPEG quality 0-1 (only used if format is 'jpeg', default: 0.95)
  * @returns Promise that resolves to a Blob of the cropped image
  */
 export function cropImage(
   image: HTMLImageElement,
   cropArea: CropArea,
-  outputDimensions?: ImageDimensions
+  outputDimensions?: ImageDimensions,
+  format: 'png' | 'jpeg' = 'png',
+  quality: number = 0.95
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
@@ -69,6 +73,9 @@ export function cropImage(
       outputHeight
     );
 
+    // Use PNG for lossless quality, JPEG for smaller file size
+    const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+    
     canvas.toBlob(
       (blob) => {
         if (blob) {
@@ -77,8 +84,8 @@ export function cropImage(
           reject(new Error('Failed to create blob'));
         }
       },
-      'image/jpeg',
-      0.95
+      mimeType,
+      format === 'jpeg' ? quality : undefined
     );
   });
 }

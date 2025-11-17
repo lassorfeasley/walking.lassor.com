@@ -10,6 +10,39 @@ import Link from 'next/link';
 import { getAllImages, deleteImage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 
+/**
+ * Format location for display:
+ * - USA: "City, State"
+ * - Non-USA: "Region/State, Country"
+ */
+function formatLocationForDisplay(locationName: string): string {
+  if (!locationName) return '';
+  
+  // Split by comma and trim each part
+  const parts = locationName.split(',').map(p => p.trim());
+  
+  // Check if it's in the United States
+  const isUSA = parts[parts.length - 1]?.toLowerCase().includes('united states');
+  
+  if (isUSA && parts.length >= 3) {
+    // USA format: "Street, City, State ZIP, Country"
+    // Return: "City, State"
+    const city = parts[parts.length - 3];
+    const stateZip = parts[parts.length - 2];
+    // Remove ZIP code from state (e.g., "New York 10014" -> "New York")
+    const state = stateZip.replace(/\s+\d+.*$/, '').trim();
+    return `${city}, ${state}`;
+  } else if (parts.length >= 2) {
+    // Non-USA format: Return last two parts (Region, Country)
+    const region = parts[parts.length - 2];
+    const country = parts[parts.length - 1];
+    return `${region}, ${country}`;
+  }
+  
+  // Fallback: return as-is
+  return locationName;
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const [images, setImages] = useState<PanoramaImage[]>([]);
@@ -137,7 +170,9 @@ export default function LibraryPage() {
                     <p className="text-sm font-medium line-clamp-2 mb-1">{image.title}</p>
                   )}
                   {image.location_name && (
-                    <p className="text-xs text-muted-foreground line-clamp-1">{image.location_name}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {formatLocationForDisplay(image.location_name)}
+                    </p>
                   )}
                   {image.date_taken && (
                     <p className="text-xs text-muted-foreground mt-1">

@@ -26,12 +26,83 @@ interface ImageMetadataFormProps {
   existingTags: string[];
 }
 
+// Country list with ISO codes
+const COUNTRIES = [
+  { code: 'US', name: 'United States', flag: '🇺🇸' },
+  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
+  { code: 'CA', name: 'Canada', flag: '🇨🇦' },
+  { code: 'AU', name: 'Australia', flag: '🇦🇺' },
+  { code: 'FR', name: 'France', flag: '🇫🇷' },
+  { code: 'DE', name: 'Germany', flag: '🇩🇪' },
+  { code: 'IT', name: 'Italy', flag: '🇮🇹' },
+  { code: 'ES', name: 'Spain', flag: '🇪🇸' },
+  { code: 'JP', name: 'Japan', flag: '🇯🇵' },
+  { code: 'CN', name: 'China', flag: '🇨🇳' },
+  { code: 'MX', name: 'Mexico', flag: '🇲🇽' },
+  { code: 'BR', name: 'Brazil', flag: '🇧🇷' },
+  { code: 'AR', name: 'Argentina', flag: '🇦🇷' },
+  { code: 'BQ', name: 'Caribbean Netherlands', flag: '🇧🇶' },
+  { code: 'CW', name: 'Curaçao', flag: '🇨🇼' },
+  { code: 'SX', name: 'Sint Maarten', flag: '🇸🇽' },
+  { code: 'AW', name: 'Aruba', flag: '🇦🇼' },
+  { code: 'JM', name: 'Jamaica', flag: '🇯🇲' },
+  { code: 'BS', name: 'Bahamas', flag: '🇧🇸' },
+  { code: 'BB', name: 'Barbados', flag: '🇧🇧' },
+  { code: 'TT', name: 'Trinidad and Tobago', flag: '🇹🇹' },
+  { code: 'PR', name: 'Puerto Rico', flag: '🇵🇷' },
+  { code: 'DO', name: 'Dominican Republic', flag: '🇩🇴' },
+  { code: 'CU', name: 'Cuba', flag: '🇨🇺' },
+  { code: 'HT', name: 'Haiti', flag: '🇭🇹' },
+  { code: 'KY', name: 'Cayman Islands', flag: '🇰🇾' },
+  { code: 'VG', name: 'British Virgin Islands', flag: '🇻🇬' },
+  { code: 'VI', name: 'US Virgin Islands', flag: '🇻🇮' },
+  { code: 'IN', name: 'India', flag: '🇮🇳' },
+  { code: 'NL', name: 'Netherlands', flag: '🇳🇱' },
+  { code: 'BE', name: 'Belgium', flag: '🇧🇪' },
+  { code: 'CH', name: 'Switzerland', flag: '🇨🇭' },
+  { code: 'AT', name: 'Austria', flag: '🇦🇹' },
+  { code: 'SE', name: 'Sweden', flag: '🇸🇪' },
+  { code: 'NO', name: 'Norway', flag: '🇳🇴' },
+  { code: 'DK', name: 'Denmark', flag: '🇩🇰' },
+  { code: 'FI', name: 'Finland', flag: '🇫🇮' },
+  { code: 'PT', name: 'Portugal', flag: '🇵🇹' },
+  { code: 'GR', name: 'Greece', flag: '🇬🇷' },
+  { code: 'PL', name: 'Poland', flag: '🇵🇱' },
+  { code: 'CZ', name: 'Czech Republic', flag: '🇨🇿' },
+  { code: 'IE', name: 'Ireland', flag: '🇮🇪' },
+  { code: 'NZ', name: 'New Zealand', flag: '🇳🇿' },
+  { code: 'SG', name: 'Singapore', flag: '🇸🇬' },
+  { code: 'KR', name: 'South Korea', flag: '🇰🇷' },
+  { code: 'TH', name: 'Thailand', flag: '🇹🇭' },
+  { code: 'VN', name: 'Vietnam', flag: '🇻🇳' },
+  { code: 'ID', name: 'Indonesia', flag: '🇮🇩' },
+  { code: 'MY', name: 'Malaysia', flag: '🇲🇾' },
+  { code: 'PH', name: 'Philippines', flag: '🇵🇭' },
+  { code: 'ZA', name: 'South Africa', flag: '🇿🇦' },
+  { code: 'EG', name: 'Egypt', flag: '🇪🇬' },
+  { code: 'MA', name: 'Morocco', flag: '🇲🇦' },
+  { code: 'IL', name: 'Israel', flag: '🇮🇱' },
+  { code: 'TR', name: 'Turkey', flag: '🇹🇷' },
+  { code: 'RU', name: 'Russia', flag: '🇷🇺' },
+  { code: 'AE', name: 'United Arab Emirates', flag: '🇦🇪' },
+  { code: 'CL', name: 'Chile', flag: '🇨🇱' },
+  { code: 'CO', name: 'Colombia', flag: '🇨🇴' },
+  { code: 'PE', name: 'Peru', flag: '🇵🇪' },
+  { code: 'CR', name: 'Costa Rica', flag: '🇨🇷' },
+  { code: 'PA', name: 'Panama', flag: '🇵🇦' },
+  { code: 'IS', name: 'Iceland', flag: '🇮🇸' },
+];
+
 export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMetadataFormProps) {
   const [locationInput, setLocationInput] = useState(metadata.location_name || '');
   const [tagInput, setTagInput] = useState((metadata.tags || []).join(', '));
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [selectedCountry, setSelectedCountry] = useState('US');
+  const [countrySearch, setCountrySearch] = useState('');
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  const countryDropdownRef = useRef<HTMLDivElement>(null);
 
   // Prefill with test data on mount
   useEffect(() => {
@@ -259,6 +330,23 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
     setTagSuggestions([]);
   };
 
+  // Filter countries based on search
+  const filteredCountries = COUNTRIES.filter(country =>
+    country.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+    country.code.toLowerCase().includes(countrySearch.toLowerCase())
+  );
+
+  // Close country dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target as Node)) {
+        setShowCountryDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <Card>
       <CardHeader>
@@ -268,7 +356,73 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
         {/* Location Section */}
         <div className="space-y-3">
           <Label htmlFor="location">Location *</Label>
+          
+          {/* Country Selector - Searchable Combobox */}
           <div className="space-y-2">
+            <Label htmlFor="country" className="text-xs text-muted-foreground">Country</Label>
+            <div className="relative" ref={countryDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm border border-input rounded-md bg-background hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <span>
+                  {COUNTRIES.find(c => c.code === selectedCountry)?.flag}{' '}
+                  {COUNTRIES.find(c => c.code === selectedCountry)?.name}
+                </span>
+                <svg className="h-4 w-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              {showCountryDropdown && (
+                <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-80 overflow-hidden">
+                  <div className="p-2 border-b border-border sticky top-0 bg-popover">
+                    <Input
+                      type="text"
+                      placeholder="Search countries..."
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      className="h-8 text-sm"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="overflow-y-auto max-h-64">
+                    {filteredCountries.map((country) => (
+                      <button
+                        key={country.code}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCountry(country.code);
+                          setShowCountryDropdown(false);
+                          setCountrySearch('');
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2 ${
+                          selectedCountry === country.code ? 'bg-accent' : ''
+                        }`}
+                      >
+                        <span className="text-lg">{country.flag}</span>
+                        <span>{country.name}</span>
+                        {selectedCountry === country.code && (
+                          <svg className="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                    {filteredCountries.length === 0 && (
+                      <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                        No countries found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="location" className="text-xs text-muted-foreground">Address / Place</Label>
             <SearchBox
               accessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''}
               onRetrieve={(retrieveResponse) => {
@@ -286,7 +440,9 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
               placeholder="Search for a location..."
               options={{
                 language: 'en',
-                country: 'US',
+                country: selectedCountry,
+                types: 'address,poi,place,locality,neighborhood,district,postcode,region',
+                limit: 10,
               }}
             />
             {metadata.latitude && metadata.longitude && (

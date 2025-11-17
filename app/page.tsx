@@ -105,7 +105,8 @@ export default function Home() {
           <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-px">
             {images.map((image, index) => {
               const variant = getVariant(index);
-              const imageUrl = image.processed_url || image.original_url;
+              // Use optimized images for fast loading: preview for quality, thumbnail as fallback
+              const imageUrl = image.preview_url || image.thumbnail_url || image.processed_url || image.original_url;
               const latDMS = toDMS(image.latitude, true);
               const lngDMS = toDMS(image.longitude, false);
               const dateFormatted = image.date_taken ? formatDateMonthYear(image.date_taken) : '';

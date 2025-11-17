@@ -7,10 +7,52 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText, Download, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { getImageMetadata, getPanelsByImageId, deleteImage } from '@/lib/supabase/database';
+import { getImageMetadata, getPanelsByImageId, deleteImage, saveImageMetadata } from '@/lib/supabase/database';
 import { useEffect, useState } from 'react';
 import { PanoramaImage, PanoramaPanel } from '@/types';
 import JSZip from 'jszip';
+import { uploadFile } from '@/lib/supabase/storage';
+
+// Helper function to generate web-optimized version
+async function generateWebOptimized(
+  image: HTMLImageElement,
+  maxWidth: number,
+  quality: number = 0.85
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      reject(new Error('Could not get canvas context'));
+      return;
+    }
+
+    let width = image.naturalWidth;
+    let height = image.naturalHeight;
+    
+    if (width > maxWidth) {
+      height = (height * maxWidth) / width;
+      width = maxWidth;
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    ctx.drawImage(image, 0, 0, width, height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('Failed to create blob'));
+        }
+      },
+      'image/jpeg',
+      quality
+    );
+  });
+}
 
 export default function PanoramaDetailPage({
   params,
@@ -25,6 +67,7 @@ export default function PanoramaDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isGeneratingOptimized, setIsGeneratingOptimized] = useState(false);
 
   const handleDelete = async () => {
     if (!image) return;
@@ -49,6 +92,82 @@ export default function PanoramaDetailPage({
       alert('Failed to delete panorama. Please try again.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleGenerateOptimizedVersions = async () => {
+    if (!image) return;
+
+    setIsGeneratingOptimized(true);
+    try {
+      // Use processed_url if available, otherwise use original_url
+      const sourceUrl = image.processed_url || image.original_url;
+      
+      // Load the source image
+      const img = document.createElement('img');
+      img.crossOrigin = 'anonymous';
+      img.src = sourceUrl;
+      
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+      });
+
+      const timestamp = Date.now();
+      let thumbnailUrl: string | undefined = image.thumbnail_url;
+      let previewUrl: string | undefined = image.preview_url;
+
+      // Generate thumbnail if missing
+      if (!image.thumbnail_url) {
+        const thumbnailBlob = await generateWebOptimized(img, 400, 0.80);
+        const thumbnailFile = new File([thumbnailBlob], `thumb-${timestamp}.jpg`, {
+          type: 'image/jpeg',
+        });
+        const thumbnailResult = await uploadFile(thumbnailFile, {
+          bucket: 'optimized-web',
+          folder: 'thumbnails',
+        });
+        if (thumbnailResult) {
+          thumbnailUrl = thumbnailResult.url;
+        }
+      }
+
+      // Generate preview if missing
+      if (!image.preview_url) {
+        const previewBlob = await generateWebOptimized(img, 1920, 0.85);
+        const previewFile = new File([previewBlob], `preview-${timestamp}.jpg`, {
+          type: 'image/jpeg',
+        });
+        const previewResult = await uploadFile(previewFile, {
+          bucket: 'optimized-web',
+          folder: 'previews',
+        });
+        if (previewResult) {
+          previewUrl = previewResult.url;
+        }
+      }
+
+      // Update the database
+      const updatedImage = {
+        ...image,
+        thumbnail_url: thumbnailUrl,
+        preview_url: previewUrl,
+      };
+
+      await saveImageMetadata(updatedImage);
+
+      // Refresh the page data
+      const refreshedImage = await getImageMetadata(id);
+      if (refreshedImage) {
+        setImage(refreshedImage);
+      }
+
+      alert('Optimized versions generated successfully!');
+    } catch (error) {
+      console.error('Generate optimized versions error:', error);
+      alert('Failed to generate optimized versions. Please try again.');
+    } finally {
+      setIsGeneratingOptimized(false);
     }
   };
 
@@ -350,6 +469,19 @@ export default function PanoramaDetailPage({
                   {isDownloading ? 'Downloading...' : 'Download Zip'}
                 </Button>
                 
+                {/* Generate Optimized Versions Button */}
+                {(!image.thumbnail_url || !image.preview_url) && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleGenerateOptimizedVersions}
+                    disabled={isGeneratingOptimized}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    {isGeneratingOptimized ? 'Generating...' : 'Generate Missing Versions'}
+                  </Button>
+                )}
+                
                 {/* Download Quality Tiers Section */}
                 <div className="border-t border-border pt-3 mt-1">
                   <p className="text-xs font-medium text-muted-foreground mb-2">Download Quality Tiers</p>
@@ -398,6 +530,29 @@ export default function PanoramaDetailPage({
                     )}
                   </div>
                 </div>
+                
+                {/* Download Panel Images Section */}
+                {panels.length > 0 && (
+                  <div className="border-t border-border pt-3 mt-2">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      Download Panel Images ({panels.length})
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      {panels.map((panel) => (
+                        <Button
+                          key={panel.id}
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start text-xs h-8"
+                          onClick={() => window.open(panel.panel_url, '_blank')}
+                        >
+                          <Download className="mr-2 h-3 w-3" />
+                          Panel {panel.panel_order} (1080x1080)
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="border-t border-border mt-2 pt-2">
                   <Button

@@ -467,9 +467,9 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           filteredImg.onload = resolve;
         });
 
-        const outputDimensions = getPanelDimensions(panelCount, 1080);
-
-        const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, outputDimensions);
+        // Crop to the exact area selected (Cropper already enforces correct aspect ratio)
+        // Don't force output dimensions - it causes distortion
+        const croppedBlob = await cropImage(filteredImg, croppedAreaPixels);
         const timestamp = Date.now();
         
         // Save processed version as PNG (lossless) for print quality
@@ -690,8 +690,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       // Calculate output dimensions based on panel count
       const outputDimensions = getPanelDimensions(panelCount, 1080);
 
-      // Crop the image
-      const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, outputDimensions);
+      // Crop the image (use JPEG for export/download to reduce file size)
+      const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, outputDimensions, 'jpeg', 0.95);
 
       // Load the cropped image
       const croppedImg = new Image();
@@ -979,6 +979,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                         onRotationChange={setRotation}
                         onCropComplete={onCropComplete}
                         cropShape="rect"
+                        zoomWithScroll={false}
                       />
                       {/* Loading indicator overlay */}
                       {isUpdatingPreview && (
@@ -1081,15 +1082,40 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                Zoom: {Math.round(zoom * 100)}%
+                Zoom
               </label>
-              <Slider
-                value={[zoom]}
-                onValueChange={(value) => setZoom(value[0])}
-                min={1}
-                max={3}
-                step={0.1}
-              />
+              <div className="flex items-center gap-3">
+                <Slider
+                  value={[zoom]}
+                  onValueChange={(value) => {
+                    setZoom(value[0]);
+                    zoomRef.current = value[0];
+                  }}
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={3}
+                    step={0.1}
+                    value={Math.round(zoom * 100)}
+                    onChange={(e) => {
+                      const percentValue = parseInt(e.target.value, 10);
+                      if (!isNaN(percentValue) && percentValue >= 100 && percentValue <= 300) {
+                        const zoomValue = percentValue / 100;
+                        setZoom(zoomValue);
+                        zoomRef.current = zoomValue;
+                      }
+                    }}
+                    className="w-16 h-8 text-xs text-center"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
