@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/server';
 import { PanoramaImage } from '@/types';
 
-// GET - Fetch image metadata by ID
+// GET - Fetch image metadata by ID (public access)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = await createClient()
     const { id } = await params;
     
+    // Public read allowed by RLS
     const { data, error } = await supabase
       .from('panorama_images')
       .select('*')
@@ -33,15 +35,26 @@ export async function GET(
   }
 }
 
-// PUT - Update image metadata by ID
+// PUT - Update image metadata by ID (requires authentication)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized', redirectTo: '/signin' },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
     const body: Partial<PanoramaImage> = await request.json();
     
+    // RLS will automatically verify ownership
     const { data, error } = await supabase
       .from('panorama_images')
       .update({

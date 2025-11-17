@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/server';
 import { PanoramaImage } from '@/types';
 
-// GET - List images or get image by URL
+// GET - List images or get image by URL (public access)
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createClient()
     const { searchParams } = new URL(request.url);
     const url = searchParams.get('url');
 
     if (url) {
-      // Get image by URL
+      // Get image by URL (public read allowed by RLS)
       const { data, error } = await supabase
         .from('panorama_images')
         .select('*')
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data);
     }
 
-    // List all images
+    // List all images (public read allowed by RLS)
     const { data, error } = await supabase
       .from('panorama_images')
       .select('*')
@@ -50,15 +51,26 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create image record
+// POST - Create image record (requires authentication)
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized', redirectTo: '/signin' },
+        { status: 401 }
+      );
+    }
+
     const body: PanoramaImage = await request.json();
     
     const { data, error } = await supabase
       .from('panorama_images')
       .insert({
         ...body,
+        user_id: user.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

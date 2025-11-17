@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { PanoramaImage, PanoramaPanel } from '@/types';
 import JSZip from 'jszip';
 import { uploadFile } from '@/lib/supabase/storage';
+import { useRequireAuth } from '@/lib/auth-client';
 
 // Helper function to generate web-optimized version
 async function generateWebOptimized(
@@ -61,6 +62,7 @@ export default function PanoramaDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { isLoading: isAuthLoading } = useRequireAuth();
   const [image, setImage] = useState<PanoramaImage | null>(null);
   const [panels, setPanels] = useState<PanoramaPanel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,6 +70,16 @@ export default function PanoramaDetailPage({
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isGeneratingOptimized, setIsGeneratingOptimized] = useState(false);
+
+  if (isAuthLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleDelete = async () => {
     if (!image) return;

@@ -79,7 +79,7 @@ export default function Home() {
             </div>
           </div>
           <div className="size- flex justify-start items-end gap-4">
-            <Link href="/upload" className="justify-start text-neutral-400 text-3xl font-black cursor-pointer hover:text-neutral-600 transition-colors">
+            <Link href="/signin" className="justify-start text-neutral-400 text-3xl font-black cursor-pointer hover:text-neutral-600 transition-colors">
               <ArrowUp className="w-8 h-8" />
             </Link>
             <div className="justify-start text-neutral-400 text-3xl font-black">

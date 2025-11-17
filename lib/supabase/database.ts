@@ -1,4 +1,4 @@
-import { supabase } from './client';
+import { createClient } from './browser';
 import { PanoramaImage, PanoramaPanel } from '@/types';
 import { deleteFile, RAW_BUCKET, PROCESSED_BUCKET } from './storage';
 
@@ -6,6 +6,7 @@ import { deleteFile, RAW_BUCKET, PROCESSED_BUCKET } from './storage';
  * Fetch existing image metadata by ID
  */
 export async function getImageMetadata(imageId: string): Promise<PanoramaImage | null> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('panorama_images')
     .select('*')
@@ -30,6 +31,7 @@ export async function getImageMetadata(imageId: string): Promise<PanoramaImage |
  * Fetch image by URL (for editing existing images)
  */
 export async function getImageByUrl(imageUrl: string): Promise<PanoramaImage | null> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('panorama_images')
     .select('*')
@@ -64,6 +66,7 @@ export async function getImageByUrl(imageUrl: string): Promise<PanoramaImage | n
  * Fetch all images from database
  */
 export async function getAllImages(): Promise<PanoramaImage[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('panorama_images')
     .select('*')
@@ -71,6 +74,16 @@ export async function getAllImages(): Promise<PanoramaImage[]> {
 
   if (error) {
     console.error('Error fetching all images:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    // If it's an RLS policy error, log a helpful message
+    if (error.code === '42501' || error.message?.includes('policy')) {
+      console.error('RLS Policy Error: Make sure you have run the update-rls-public-read.sql script in Supabase');
+    }
+    return [];
+  }
+
+  if (!data) {
+    console.log('No images found in database');
     return [];
   }
 
@@ -92,6 +105,15 @@ export async function getAllImages(): Promise<PanoramaImage[]> {
  * Save or update image metadata
  */
 export async function saveImageMetadata(data: PanoramaImage): Promise<PanoramaImage | null> {
+  const supabase = createClient()
+  
+  // Get current user for setting user_id on new records
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    console.error('User not authenticated');
+    return null;
+  }
+
   // Check if record exists (only if id is provided and not empty)
   const hasId = data.id && data.id.trim() !== '';
   const existing = hasId ? await getImageMetadata(data.id) : null;
@@ -109,6 +131,7 @@ export async function saveImageMetadata(data: PanoramaImage): Promise<PanoramaIm
 
   if (existing && hasId) {
     // Update existing record
+    // RLS will verify ownership
     const { data: updated, error } = await supabase
       .from('panorama_images')
       .update({
@@ -132,6 +155,7 @@ export async function saveImageMetadata(data: PanoramaImage): Promise<PanoramaIm
       .from('panorama_images')
       .insert({
         ...dataToSave,
+        user_id: user.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -172,6 +196,7 @@ function normalizeTagSlug(tagName: string): string {
  * Get or create tags in the tags table
  */
 async function getOrCreateTags(tagNames: string[]): Promise<string[]> {
+  const supabase = createClient()
   const tagIds: string[] = [];
 
   for (const tagName of tagNames) {
@@ -227,6 +252,7 @@ async function getOrCreateTags(tagNames: string[]): Promise<string[]> {
  * Fetch all tags from the tags table, sorted by usage count
  */
 export async function getAllTags(): Promise<string[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('tags')
     .select('name')
@@ -245,6 +271,7 @@ export async function getAllTags(): Promise<string[]> {
  * Get tag names for an image
  */
 async function getImageTagNames(imageId: string): Promise<string[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('image_tags')
     .select(`
@@ -276,6 +303,7 @@ async function getImageTagNames(imageId: string): Promise<string[]> {
  * Set tags for an image (replaces existing tags)
  */
 async function setImageTags(imageId: string, tagNames: string[]): Promise<void> {
+  const supabase = createClient()
   // Delete existing tag relationships
   const { error: deleteError } = await supabase
     .from('image_tags')
@@ -313,6 +341,7 @@ async function setImageTags(imageId: string, tagNames: string[]): Promise<void> 
  * Delete all panels for an image (used when updating)
  */
 export async function deletePanels(imageId: string): Promise<void> {
+  const supabase = createClient()
   const { error } = await supabase
     .from('panorama_panels')
     .delete()
@@ -327,6 +356,7 @@ export async function deletePanels(imageId: string): Promise<void> {
  * Save panels for an image
  */
 export async function savePanels(imageId: string, panels: Array<{ panel_order: number; panel_url: string }>): Promise<PanoramaPanel[]> {
+  const supabase = createClient()
   // Delete existing panels first
   await deletePanels(imageId);
 
@@ -357,6 +387,7 @@ export async function savePanels(imageId: string, panels: Array<{ panel_order: n
  * Get all panels for an image, ordered by panel_order
  */
 export async function getPanelsByImageId(imageId: string): Promise<PanoramaPanel[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('panorama_panels')
     .select('*')
@@ -401,6 +432,7 @@ function extractStoragePath(url: string): { path: string; bucket: string } | nul
  */
 export async function deleteImage(imageId: string): Promise<boolean> {
   try {
+    const supabase = createClient()
     // First, fetch the image metadata to get file URLs
     const image = await getImageMetadata(imageId);
     if (!image) {

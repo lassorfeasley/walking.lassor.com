@@ -6,6 +6,7 @@ import { ImageEditor } from '@/components/editor/ImageEditor';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useRequireAuth } from '@/lib/auth-client';
 
 export default function EditPage({
   params,
@@ -15,8 +16,19 @@ export default function EditPage({
   const { url } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isLoading: isAuthLoading } = useRequireAuth();
   const imageUrl = decodeURIComponent(url);
   const imageId = searchParams.get('id') || undefined;
+
+  if (isAuthLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8" style={{ maxWidth: '3000px' }}>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSave = (recordId: string) => {
     console.log('Image saved with record ID:', recordId);

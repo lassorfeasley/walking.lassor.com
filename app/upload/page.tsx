@@ -8,11 +8,23 @@ import { rotateToLandscape } from '@/lib/image-processing/utils';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useRequireAuth } from '@/lib/auth-client';
 
 export default function UploadPage() {
   const router = useRouter();
+  const { isLoading: isAuthLoading } = useRequireAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (isAuthLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-2xl">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleUpload = async (file: File) => {
     setIsUploading(true);

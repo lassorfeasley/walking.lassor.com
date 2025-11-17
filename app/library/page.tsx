@@ -9,6 +9,7 @@ import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { getAllImages, deleteImage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
+import { useRequireAuth } from '@/lib/auth-client';
 
 /**
  * Format location for display:
@@ -45,10 +46,21 @@ function formatLocationForDisplay(locationName: string): string {
 
 export default function LibraryPage() {
   const router = useRouter();
+  const { isLoading: isAuthLoading } = useRequireAuth();
   const [images, setImages] = useState<PanoramaImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  if (isAuthLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleDelete = async (imageId: string, imageTitle: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent navigation to detail page

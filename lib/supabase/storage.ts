@@ -1,4 +1,4 @@
-import { supabase } from './client';
+import { createClient } from './browser';
 
 const RAW_BUCKET = process.env.NEXT_PUBLIC_STORAGE_BUCKET_RAW || 'raw-panoramas';
 const PROCESSED_BUCKET = process.env.NEXT_PUBLIC_STORAGE_BUCKET_PROCESSED || 'processed-images';
@@ -17,6 +17,7 @@ export async function uploadFile(
   file: File,
   options: UploadOptions = {}
 ): Promise<{ path: string; url: string } | null> {
+  const supabase = createClient()
   const bucket = options.bucket || RAW_BUCKET;
   const fileName = options.fileName || `${Date.now()}-${file.name}`;
   const filePath = options.folder ? `${options.folder}/${fileName}` : fileName;
@@ -47,6 +48,7 @@ export async function uploadFile(
  * Get public URL for a file in storage
  */
 export function getPublicUrl(path: string, bucket?: string): string {
+  const supabase = createClient()
   const targetBucket = bucket || RAW_BUCKET;
   const { data } = supabase.storage.from(targetBucket).getPublicUrl(path);
   return data.publicUrl;
@@ -56,6 +58,7 @@ export function getPublicUrl(path: string, bucket?: string): string {
  * Delete a file from storage
  */
 export async function deleteFile(path: string, bucket?: string): Promise<boolean> {
+  const supabase = createClient()
   const targetBucket = bucket || RAW_BUCKET;
   const { error } = await supabase.storage.from(targetBucket).remove([path]);
   return !error;
@@ -65,6 +68,7 @@ export async function deleteFile(path: string, bucket?: string): Promise<boolean
  * List files in a bucket
  */
 export async function listFiles(bucket?: string, folder?: string): Promise<string[]> {
+  const supabase = createClient()
   const targetBucket = bucket || RAW_BUCKET;
   const { data, error } = await supabase.storage.from(targetBucket).list(folder);
 
