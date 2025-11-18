@@ -339,10 +339,19 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
 
   // Sync locationInput when metadata.location_name changes externally
   useEffect(() => {
-    if (metadata.location_name && metadata.location_name !== locationInput) {
-      setLocationInput(metadata.location_name);
+    const newLocation = metadata.location_name || '';
+    if (newLocation !== locationInput) {
+      setLocationInput(newLocation);
     }
-  }, [metadata.location_name]);
+  }, [metadata.location_name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync tagInput when metadata.tags changes externally
+  useEffect(() => {
+    const tagsString = (metadata.tags || []).join(', ');
+    if (tagsString !== tagInput) {
+      setTagInput(tagsString);
+    }
+  }, [metadata.tags]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update map preview when coordinates change
   useEffect(() => {
