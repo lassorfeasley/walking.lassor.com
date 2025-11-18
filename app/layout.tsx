@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inconsolata } from "next/font/google";
+import { Geist, Geist_Mono, Inconsolata, Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { AdminNav } from "@/components/auth/AdminNav";
 
@@ -18,6 +18,12 @@ const inconsolata = Inconsolata({
   subsets: ["latin"],
 });
 
+const beVietnamPro = Be_Vietnam_Pro({
+  variable: "--font-be-vietnam-pro",
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "Walking Forward",
   description: "Panorama image processing and Instagram automation",
@@ -31,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${inconsolata.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${inconsolata.variable} ${beVietnamPro.variable} antialiased`}
       >
         <AdminNav />
         {children}

@@ -137,7 +137,7 @@ export default function PublicPanoramaPage({
   if (isLoading) {
     return (
       <div className="w-full min-h-screen bg-white flex items-center justify-center">
-        <p className="text-neutral-500 text-xs font-medium font-mono">Loading panorama...</p>
+        <p className="text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)]">Loading panorama...</p>
       </div>
     );
   }
@@ -145,7 +145,7 @@ export default function PublicPanoramaPage({
   if (error || !image) {
     return (
       <div className="w-full min-h-screen bg-white flex items-center justify-center">
-        <p className="text-neutral-500 text-xs font-medium font-mono">{error || 'Image not found'}</p>
+        <p className="text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)]">{error || 'Image not found'}</p>
       </div>
     );
   }
@@ -165,7 +165,7 @@ export default function PublicPanoramaPage({
     <div className="self-stretch inline-flex flex-col justify-start items-center bg-white min-h-screen">
       {/* Breadcrumb Section */}
       <div className="self-stretch h-20 px-5 py-3 border-b border-neutral-300 flex flex-col justify-center items-start gap-5">
-        <div className="justify-start text-neutral-500 text-base font-normal font-['Inconsolata']">
+        <div className="justify-start text-neutral-500 text-base font-normal font-[var(--font-inconsolata)]">
           <Link href="https://lassor.com" className="hover:text-neutral-700 transition-colors">
             lassor.com
           </Link>
@@ -185,14 +185,14 @@ export default function PublicPanoramaPage({
           <div className="self-stretch py-5 border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-5">
             {/* Title and Coordinates */}
             <div className="self-stretch px-3 inline-flex justify-between items-center">
-              <div className="justify-start text-neutral-700 text-xl font-extralight font-['Inconsolata']">
+              <div className="justify-start text-neutral-700 text-xl font-extralight font-[var(--font-inconsolata)]">
                 {image.title}
               </div>
               <div className="size- flex justify-start items-center gap-5">
-                <div className="justify-start text-neutral-700 text-xl font-extralight font-['Inconsolata']">
+                <div className="justify-start text-neutral-700 text-xl font-extralight font-[var(--font-inconsolata)]">
                   {latDMS}
                 </div>
-                <div className="justify-start text-neutral-600 text-xl font-extralight font-['Inconsolata']">
+                <div className="justify-start text-neutral-600 text-xl font-extralight font-[var(--font-inconsolata)]">
                   {lngDMS}
                 </div>
               </div>
@@ -200,22 +200,23 @@ export default function PublicPanoramaPage({
 
             {/* Main Image */}
             <img
-              className="self-stretch"
+              className="w-full"
               src={imageUrl}
               alt={image.title || 'Panorama image'}
               style={{
                 width: '100%',
                 height: `${imageHeight}px`,
                 objectFit: 'contain',
+                display: 'block',
               }}
             />
 
             {/* Location and Date */}
             <div className="self-stretch px-3 inline-flex justify-between items-center">
-              <div className="justify-start text-neutral-600 text-xl font-extralight font-['Inconsolata']">
+              <div className="justify-start text-neutral-600 text-xl font-extralight font-[var(--font-inconsolata)]">
                 {locationFormatted}
               </div>
-              <div className="justify-start text-neutral-600 text-xl font-extralight font-['Inconsolata']">
+              <div className="justify-start text-neutral-600 text-xl font-extralight font-[var(--font-inconsolata)]">
                 {dateFormatted}
               </div>
             </div>
@@ -223,7 +224,7 @@ export default function PublicPanoramaPage({
 
           {/* Description Section */}
           <div className="self-stretch h-[500px] min-h-[500px] px-3 pt-5 border-l border-r border-t border-neutral-300 inline-flex justify-start items-start gap-2.5">
-            <div className="w-96 justify-start text-neutral-500 text-xs font-medium font-['Inconsolata'] leading-4">
+            <div className="w-96 justify-start text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)] leading-4">
               {image.description}
             </div>
           </div>
@@ -233,14 +234,14 @@ export default function PublicPanoramaPage({
       {/* Footer */}
       <div className="self-stretch flex flex-col justify-start items-center">
         <div className="self-stretch h-36 px-5 pt-5 pb-24 border-t border-neutral-300 flex flex-col justify-start items-start gap-3">
-          <div className="self-stretch min-w-36 justify-start text-neutral-500 text-base font-extrabold font-['Inconsolata']">
+          <div className="self-stretch min-w-36 justify-start text-neutral-500 text-base font-extrabold font-[var(--font-inconsolata)]">
             Developed by Lassor
           </div>
           <div className="self-stretch flex flex-col justify-start items-start gap-1">
-            <div className="self-stretch justify-start text-neutral-500 text-base font-normal font-['Inconsolata']">
+            <div className="self-stretch justify-start text-neutral-500 text-base font-normal font-[var(--font-inconsolata)]">
               www.Lassor.com
             </div>
-            <div className="w-56 justify-start text-neutral-500 text-base font-normal font-['Inconsolata']">
+            <div className="w-56 justify-start text-neutral-500 text-base font-normal font-[var(--font-inconsolata)]">
               Feasley@Lassor.com
             </div>
           </div>

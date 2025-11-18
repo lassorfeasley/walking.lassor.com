@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { getAllImages } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 import { format } from 'date-fns';
-import { ArrowUp, Globe } from 'lucide-react';
 
 // Utility function to convert decimal degrees to DMS format
 function toDMS(decimal: number, isLatitude: boolean): string {
@@ -33,12 +32,25 @@ function formatDateMonthYear(dateString: string): string {
   }
 }
 
-// Determine variant based on index for visual variety
-function getVariant(index: number): 'Default' | 'Variant2' | 'Variant3' {
-  const pattern = index % 3;
-  if (pattern === 0) return 'Default';
-  if (pattern === 1) return 'Variant2';
-  return 'Variant3';
+// Format location for display (City, State for US; Region, Country for non-US)
+function formatLocationForDisplay(locationName: string): string {
+  if (!locationName) return '';
+  
+  const parts = locationName.split(',').map(p => p.trim());
+  const isUSA = parts[parts.length - 1]?.toLowerCase().includes('united states');
+  
+  if (isUSA && parts.length >= 3) {
+    const city = parts[parts.length - 3];
+    const stateZip = parts[parts.length - 2];
+    const state = stateZip.replace(/\s+\d+.*$/, '').trim();
+    return `${city}, ${state}`;
+  } else if (parts.length >= 2) {
+    const region = parts[parts.length - 2];
+    const country = parts[parts.length - 1];
+    return `${region}, ${country}`;
+  }
+  
+  return locationName;
 }
 
 export default function Home() {
@@ -65,133 +77,125 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="w-full flex flex-col min-h-screen bg-white">
-      {/* Content Section - grows to fill available space */}
-      <div className="flex-1 flex flex-col gap-10">
-        {/* Header Section */}
-        <div className="w-full p-10 bg-white flex justify-between items-start">
-          <div className="flex-1 max-w-2xl inline-flex flex-col justify-start items-start gap-4">
-            <div className="justify-start text-stone-900 text-2xl font-extralight font-mono">
-              walking forward
-            </div>
-            <div className="self-stretch h-14 justify-start text-neutral-500 text-xs font-medium font-mono leading-4">
-              Walking Forward documents Lassor's travels from an unconventional point of view. Each panel is a digital panoramic capture, creating a continuous record of motion. The work contrasts Lassor's fleeting movement through space with the enduring character of each place.
-            </div>
+    <div className="w-full bg-white inline-flex flex-col justify-start items-start overflow-hidden min-h-screen">
+      {/* Header */}
+      <div className="self-stretch h-20 px-5 py-3 border-b border-neutral-300 inline-flex justify-between items-center">
+        <div className="justify-start text-neutral-500 text-xs font-normal font-[var(--font-inconsolata)]">
+          <Link href="https://lassor.com" className="hover:text-neutral-700 transition-colors">
+            lassor.com
+          </Link>
+          {' → '}
+          Walking forward
+        </div>
+        <div className="flex justify-start items-end gap-4">
+          <Link href="/signin" className="justify-start text-neutral-400 text-3xl font-black cursor-pointer hover:text-neutral-600 transition-colors">
+            <i className="fas fa-arrow-up"></i>
+          </Link>
+          <div className="justify-start text-neutral-400 text-3xl font-black">
+            <i className="fas fa-globe"></i>
           </div>
-          <div className="size- flex justify-start items-end gap-4">
-            <Link href="/signin" className="justify-start text-neutral-400 text-3xl font-black cursor-pointer hover:text-neutral-600 transition-colors">
-              <ArrowUp className="w-8 h-8" />
-            </Link>
-            <div className="justify-start text-neutral-400 text-3xl font-black">
-              <Globe className="w-8 h-8" />
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="self-stretch flex flex-col justify-start items-center">
+        <div className="self-stretch px-5 flex flex-col justify-start items-center gap-2.5">
+          <div className="w-full max-w-[1960px] pb-10 border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-5">
+            {/* Description Section */}
+            <div className="self-stretch px-3 pt-3 pb-5 border-b border-neutral-300 flex flex-col justify-start items-start gap-8">
+              <div className="w-full max-w-[652px] flex flex-col justify-start items-start gap-2">
+                <div className="justify-start text-neutral-600 text-2xl font-light font-[var(--font-be-vietnam-pro)]">
+                  walking forward
+                </div>
+                <div className="self-stretch justify-start text-neutral-400 text-xs font-medium font-[var(--font-be-vietnam-pro)] leading-5">
+                  Walking Forward documents Lassor's travels from an unconventional point of view. Each panel is a digital panoramic capture, creating a continuous record of motion. The work contrasts Lassor's fleeting movement through space with the enduring character of each place.
+                </div>
+              </div>
+            </div>
+
+            {/* Panorama Grid */}
+            <div className="self-stretch flex flex-col justify-start items-start">
+              {isLoading ? (
+                <div className="w-full flex justify-center items-center py-12">
+                  <p className="text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)]">Loading panoramas...</p>
+                </div>
+              ) : error ? (
+                <div className="w-full flex justify-center items-center py-12">
+                  <p className="text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)]">{error}</p>
+                </div>
+              ) : images.length === 0 ? (
+                <div className="w-full flex justify-center items-center py-12">
+                  <p className="text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)]">No panoramas yet.</p>
+                </div>
+              ) : (
+                <div className="self-stretch grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-y-[60px]">
+                  {images.map((image) => {
+                    const imageUrl = image.preview_url || image.thumbnail_url || image.processed_url || image.original_url;
+                    const latDMS = toDMS(image.latitude, true);
+                    const lngDMS = toDMS(image.longitude, false);
+                    const dateFormatted = image.date_taken ? formatDateMonthYear(image.date_taken) : '';
+                    const locationFormatted = formatLocationForDisplay(image.location_name);
+
+                    return (
+                      <div
+                        key={image.id}
+                        className="w-full min-w-[400px] inline-flex flex-col justify-start items-start gap-1 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => router.push(`/panorama/${image.id}`)}
+                      >
+                        {/* Header with Title and Coordinates */}
+                        <div className="self-stretch px-3 inline-flex justify-between items-center">
+                          <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                            {image.title || 'Title'}
+                          </div>
+                          <div className="flex justify-start items-center gap-2">
+                            <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                              {latDMS}
+                            </div>
+                            <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                              {lngDMS}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Image */}
+                        <img
+                          className="w-full"
+                          src={imageUrl}
+                          alt={image.title || image.description || 'Panorama image'}
+                          style={{ display: 'block', height: 'auto', objectFit: 'contain' }}
+                        />
+
+                        {/* Footer with Location and Date */}
+                        <div className="self-stretch px-3 inline-flex justify-between items-center">
+                          <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                            {locationFormatted || 'Location'}
+                          </div>
+                          <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                            {dateFormatted || 'Date'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Images Grid */}
-        {isLoading ? (
-          <div className="w-full flex justify-center items-center py-12">
-            <p className="text-neutral-500 text-xs font-medium font-mono">Loading panoramas...</p>
-          </div>
-        ) : error ? (
-          <div className="w-full flex justify-center items-center py-12">
-            <p className="text-neutral-500 text-xs font-medium font-mono">{error}</p>
-          </div>
-        ) : images.length === 0 ? (
-          <div className="w-full flex justify-center items-center py-12">
-            <p className="text-neutral-500 text-xs font-medium font-mono">No panoramas yet.</p>
-          </div>
-        ) : (
-          <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-x-px gap-y-[100px]">
-            {images.map((image, index) => {
-              const variant = getVariant(index);
-              // Use optimized images for fast loading: preview for quality, thumbnail as fallback
-              const imageUrl = image.preview_url || image.thumbnail_url || image.processed_url || image.original_url;
-              const latDMS = toDMS(image.latitude, true);
-              const lngDMS = toDMS(image.longitude, false);
-              const dateFormatted = image.date_taken ? formatDateMonthYear(image.date_taken) : '';
-
-              return (
-                <div
-                  key={image.id}
-                  className="w-full flex flex-col cursor-pointer hover:opacity-90 transition-opacity bg-white"
-                  onClick={() => router.push(`/panorama/${image.id}`)}
-                >
-                  {/* Header with Title and Coordinates */}
-                  <div className="w-full px-3 py-1 flex justify-between items-center min-h-[20px]">
-                    <div className="justify-start text-neutral-300 text-[8px] font-extrabold font-mono truncate flex-1">
-                      {image.title || 'Title'}
-                    </div>
-                    <div className="flex justify-start items-center gap-2 flex-shrink-0 ml-2">
-                      <div className="justify-start text-neutral-300 text-[8px] font-extrabold font-mono whitespace-nowrap">
-                        {latDMS}
-                      </div>
-                      <div className="justify-start text-neutral-300 text-[8px] font-extrabold font-mono whitespace-nowrap">
-                        {lngDMS}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Image Container */}
-                  <div className="w-full relative flex items-center justify-center bg-white">
-                    {variant === 'Default' && (
-                      <img
-                        className="w-full h-auto object-contain"
-                        src={imageUrl}
-                        alt={image.title || image.description || 'Panorama image'}
-                      />
-                    )}
-                    {variant === 'Variant2' && (
-                      <div className="w-full relative">
-                        <img
-                          className="w-full h-auto object-contain relative z-10"
-                          src={imageUrl}
-                          alt={image.title || image.description || 'Panorama image'}
-                        />
-                        <img
-                          className="w-full h-auto object-contain absolute top-0 left-0 opacity-50"
-                          src={imageUrl}
-                          alt={image.title || image.description || 'Panorama image'}
-                        />
-                      </div>
-                    )}
-                    {variant === 'Variant3' && (
-                      <img
-                        className="w-[calc(100%+8px)] h-auto object-contain -mx-1"
-                        src={imageUrl}
-                        alt={image.title || image.description || 'Panorama image'}
-                      />
-                    )}
-                  </div>
-
-                  {/* Footer with Location and Date */}
-                  <div className="w-full px-3 py-1 flex justify-between items-center min-h-[20px]">
-                    <div className="justify-start text-neutral-300 text-[8px] font-extrabold font-mono truncate flex-1">
-                      {image.location_name || 'Location'}
-                    </div>
-                    <div className="justify-start text-neutral-300 text-[8px] font-extrabold font-mono whitespace-nowrap flex-shrink-0 ml-2">
-                      {dateFormatted || 'Date'}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Footer Section - always at bottom */}
-      <div className="w-full flex flex-col justify-start items-center mt-auto">
-        <div className="w-full h-36 px-3 pt-3 pb-24 border-t border-neutral-300 flex flex-col justify-start items-start gap-3">
-          <div className="self-stretch min-w-36 justify-start text-neutral-500 text-xs font-bold leading-4">
-            Developed by Lassor
-          </div>
-          <div className="self-stretch flex flex-col justify-start items-start gap-1">
-            <div className="self-stretch justify-start text-neutral-500 text-xs font-medium leading-4">
-              www.Lassor.com
+        {/* Footer */}
+        <div className="self-stretch flex flex-col justify-start items-center">
+          <div className="self-stretch h-36 px-3 pt-3 pb-24 border-t border-neutral-300 flex flex-col justify-start items-start gap-3">
+            <div className="self-stretch min-w-36 justify-start text-neutral-500 text-xs font-bold leading-4 font-[var(--font-inconsolata)]">
+              Developed by Lassor
             </div>
-            <div className="w-56 justify-start text-neutral-500 text-xs font-medium leading-4">
-              Feasley@Lassor.com
+            <div className="self-stretch flex flex-col justify-start items-start gap-1">
+              <div className="self-stretch justify-start text-neutral-500 text-xs font-medium leading-4 font-[var(--font-inconsolata)]">
+                www.Lassor.com
+              </div>
+              <div className="w-56 justify-start text-neutral-500 text-xs font-medium leading-4 font-[var(--font-inconsolata)]">
+                Feasley@Lassor.com
+              </div>
             </div>
           </div>
         </div>
