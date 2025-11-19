@@ -433,12 +433,26 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           }
           
           ctx.putImageData(imageData, 0, 0);
+          
+          // Convert canvas to blob instead of data URI to avoid CORS issues
+          const modifiedBlob = await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob((blob) => {
+              if (blob) resolve(blob);
+              else reject(new Error('Failed to create blob'));
+            }, 'image/png');
+          });
+          
           const modifiedImg = new Image();
           modifiedImg.crossOrigin = 'anonymous';
-          modifiedImg.src = canvas.toDataURL();
+          const modifiedImgUrl = URL.createObjectURL(modifiedBlob);
+          modifiedImg.src = modifiedImgUrl;
           
-          await new Promise((resolve) => {
-            modifiedImg.onload = resolve;
+          await new Promise((resolve, reject) => {
+            modifiedImg.onload = () => resolve(undefined);
+            modifiedImg.onerror = () => {
+              URL.revokeObjectURL(modifiedImgUrl);
+              reject(new Error('Failed to load modified image'));
+            };
           });
           
           ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -449,6 +463,9 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
             `saturate(${filters.saturation}%)`,
           ].join(' ');
           ctx.drawImage(modifiedImg, 0, 0);
+          
+          // Revoke URL after image is drawn
+          URL.revokeObjectURL(modifiedImgUrl);
         } else {
           const effectiveBrightness = Math.max(0, filters.brightness + filters.exposure);
           ctx.filter = [
@@ -459,18 +476,34 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           ctx.drawImage(img, 0, 0);
         }
 
+        // Convert canvas to blob instead of data URI to avoid CORS issues
+        const filteredBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Failed to create blob'));
+          }, 'image/png');
+        });
+        
         const filteredImg = new Image();
         filteredImg.crossOrigin = 'anonymous';
-        filteredImg.src = canvas.toDataURL();
+        const filteredImgUrl = URL.createObjectURL(filteredBlob);
+        filteredImg.src = filteredImgUrl;
 
-        await new Promise((resolve) => {
-          filteredImg.onload = resolve;
+        await new Promise((resolve, reject) => {
+          filteredImg.onload = () => resolve(undefined);
+          filteredImg.onerror = () => {
+            URL.revokeObjectURL(filteredImgUrl);
+            reject(new Error('Failed to load filtered image'));
+          };
         });
 
         // Crop to the exact area selected (Cropper already enforces correct aspect ratio)
         // Don't force output dimensions - it causes distortion
         // Use PNG for truly lossless quality (for archival and print quality)
         const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, undefined, 'png');
+        
+        // Revoke URL after image is used
+        URL.revokeObjectURL(filteredImgUrl);
         const timestamp = Date.now();
         
         // Save processed version as PNG (lossless) for print quality
@@ -650,13 +683,26 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         // Put the modified data back
         ctx.putImageData(imageData, 0, 0);
         
+        // Convert canvas to blob instead of data URI to avoid CORS issues
+        const modifiedBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Failed to create blob'));
+          }, 'image/png');
+        });
+        
         // Create a new image from the modified canvas
         const modifiedImg = new Image();
         modifiedImg.crossOrigin = 'anonymous';
-        modifiedImg.src = canvas.toDataURL();
+        const modifiedImgUrl = URL.createObjectURL(modifiedBlob);
+        modifiedImg.src = modifiedImgUrl;
         
-        await new Promise((resolve) => {
-          modifiedImg.onload = resolve;
+        await new Promise((resolve, reject) => {
+          modifiedImg.onload = () => resolve(undefined);
+          modifiedImg.onerror = () => {
+            URL.revokeObjectURL(modifiedImgUrl);
+            reject(new Error('Failed to load modified image'));
+          };
         });
         
         // Clear canvas and apply CSS filters to the modified image
@@ -668,6 +714,9 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           `saturate(${filters.saturation}%)`,
         ].join(' ');
         ctx.drawImage(modifiedImg, 0, 0);
+        
+        // Revoke URL after image is drawn
+        URL.revokeObjectURL(modifiedImgUrl);
       } else {
         // No canvas-based filters, just apply CSS filters directly
         const effectiveBrightness = Math.max(0, filters.brightness + filters.exposure);
@@ -679,13 +728,26 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         ctx.drawImage(img, 0, 0);
       }
 
+      // Convert canvas to blob instead of data URI to avoid CORS issues
+      const filteredBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Failed to create blob'));
+        }, 'image/png');
+      });
+      
       // Create filtered image
       const filteredImg = new Image();
       filteredImg.crossOrigin = 'anonymous';
-      filteredImg.src = canvas.toDataURL();
+      const filteredImgUrl = URL.createObjectURL(filteredBlob);
+      filteredImg.src = filteredImgUrl;
 
-      await new Promise((resolve) => {
-        filteredImg.onload = resolve;
+      await new Promise((resolve, reject) => {
+        filteredImg.onload = () => resolve(undefined);
+        filteredImg.onerror = () => {
+          URL.revokeObjectURL(filteredImgUrl);
+          reject(new Error('Failed to load filtered image'));
+        };
       });
 
       // Calculate output dimensions based on panel count
@@ -693,6 +755,9 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
       // Crop the image (use JPEG for export/download to reduce file size)
       const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, outputDimensions, 'jpeg', 0.95);
+      
+      // Revoke URL after image is used
+      URL.revokeObjectURL(filteredImgUrl);
 
       // Load the cropped image
       const croppedImg = new Image();
