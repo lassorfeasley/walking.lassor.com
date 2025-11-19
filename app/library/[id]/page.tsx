@@ -317,15 +317,34 @@ export default function PanoramaDetailPage({
               <CardTitle>Original Image</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="relative w-full aspect-video overflow-hidden rounded-b-lg bg-muted">
-                <Image
-                  src={image.original_url}
-                  alt={`${image.title || 'Panorama'} - Original`}
-                  fill
-                  className="object-contain"
-                  sizes="100vw"
-                />
-              </div>
+              {image.original_url ? (
+                <div className="relative w-full aspect-video overflow-hidden rounded-b-lg bg-muted">
+                  <Image
+                    src={image.original_url}
+                    alt={`${image.title || 'Panorama'} - Original`}
+                    fill
+                    className="object-contain"
+                    sizes="100vw"
+                    onError={(e) => {
+                      console.error('Failed to load original image:', image.original_url);
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="relative w-full aspect-video overflow-hidden rounded-b-lg bg-muted flex items-center justify-center">
+                  <div className="text-center p-6">
+                    <p className="text-sm text-muted-foreground mb-2">Original image not available</p>
+                    <p className="text-xs text-muted-foreground">
+                      The original image was not uploaded, but processed versions are available.
+                    </p>
+                    {image.processed_url && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Using processed image as source.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -468,10 +487,14 @@ export default function PanoramaDetailPage({
             <CardContent className="pt-6">
               <div className="flex flex-col gap-2">
                 <Link
-                  href={`/edit/${encodeURIComponent(image.original_url)}${image.id ? `?id=${image.id}` : ''}`}
+                  href={`/edit/${encodeURIComponent(image.original_url || image.processed_url || '')}${image.id ? `?id=${image.id}` : ''}`}
                   className="w-full"
                 >
-                  <Button variant="outline" className="w-full">
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    disabled={!image.original_url && !image.processed_url}
+                  >
                     <Edit className="mr-2 h-4 w-4" />
                     Edit
                   </Button>
@@ -503,15 +526,28 @@ export default function PanoramaDetailPage({
                 <div className="border-t border-border pt-3 mt-1">
                   <p className="text-xs font-medium text-muted-foreground mb-2">Download Quality Tiers</p>
                   <div className="flex flex-col gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full justify-start text-xs h-8"
-                      onClick={() => window.open(image.original_url, '_blank')}
-                    >
-                      <Download className="mr-2 h-3 w-3" />
-                      Original (Unedited)
-                    </Button>
+                    {image.original_url ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start text-xs h-8"
+                        onClick={() => window.open(image.original_url, '_blank')}
+                      >
+                        <Download className="mr-2 h-3 w-3" />
+                        Original (Unedited)
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start text-xs h-8 opacity-50 cursor-not-allowed"
+                        disabled
+                        title="Original image not available"
+                      >
+                        <Download className="mr-2 h-3 w-3" />
+                        Original (Unedited) - Not Available
+                      </Button>
+                    )}
                     {image.processed_url && (
                       <Button
                         variant="outline"
@@ -590,6 +626,7 @@ export default function PanoramaDetailPage({
     </div>
   );
 }
+
 
 
 

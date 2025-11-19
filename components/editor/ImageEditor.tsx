@@ -100,7 +100,12 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     thumbnail_url?: string;
     preview_url?: string;
     panel_count?: number;
+    original_url?: string;
   }>({});
+  
+  // Track if we're using a fallback image (processed instead of original)
+  const [isUsingFallbackImage, setIsUsingFallbackImage] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState<string | null>(null);
 
   const aspectRatioValue = useCallback(() => {
     // Calculate aspect ratio for the image strip area (excluding white blocks)
@@ -388,6 +393,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     imageRef.current = img;
+    setImageLoadError(null);
     
     // Update filtered preview if highlights/shadows are set
     if (filters.highlights !== 0 || filters.shadows !== 0) {
@@ -396,6 +402,20 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       }, 100);
     }
   }, [filters.highlights, filters.shadows, updateFilteredPreview]);
+  
+  // Handle image load errors and try fallback
+  const handleImageError = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    console.error('Failed to load image:', imageUrl);
+    setImageLoadError(`Failed to load image: ${imageUrl.substring(0, 50)}...`);
+    
+    // If we have a processed_url as fallback and we're not already using it, try that
+    if (existingImageUrls.processed_url && !isUsingFallbackImage && imageUrl !== existingImageUrls.processed_url) {
+      console.log('Attempting to use processed_url as fallback');
+      setIsUsingFallbackImage(true);
+      // The imageUrl prop won't change, but we can update the src in the img tag
+      // Actually, we need to handle this differently - the parent needs to pass the fallback
+    }
+  }, [imageUrl, existingImageUrls.processed_url, isUsingFallbackImage]);
 
   // Set initial zoom after image loads and component is ready
   useEffect(() => {
@@ -498,7 +518,14 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
             thumbnail_url: existing.thumbnail_url,
             preview_url: existing.preview_url,
             panel_count: existing.panel_count,
+            original_url: existing.original_url,
           });
+          
+          // Check if we need to use processed_url as fallback
+          // If original_url is missing/empty and we have processed_url, we're using a fallback
+          if ((!existing.original_url || existing.original_url.trim() === '') && existing.processed_url) {
+            setIsUsingFallbackImage(true);
+          }
 
           // Set panel count from existing if available
           if (existing.panel_count) {
@@ -915,8 +942,15 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       }
 
       // Save metadata to database
+      // If editing an existing image, preserve the original original_url value
+      // (don't overwrite with processed_url fallback that we might be using for editing)
+      // For new images, use the imageUrl we have
+      const originalUrlToSave = imageId && existingImageUrls.original_url !== undefined
+        ? existingImageUrls.original_url // Preserve existing original_url value (even if empty/null)
+        : imageUrl; // New image, use whatever URL we have
+      
       const imageData: Partial<PanoramaImage> = {
-        original_url: imageUrl,
+        original_url: originalUrlToSave,
         processed_url: processedUrl,
         thumbnail_url: thumbnailUrl,
         preview_url: previewUrl,
@@ -1324,9 +1358,49 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       </div>
     );
   }
+  
+  // Show warning if using fallback image
+  const showFallbackWarning = isUsingFallbackImage || (!existingImageUrls.original_url && existingImageUrls.processed_url);
 
   return (
     <div className="space-y-6">
+      {showFallbackWarning && (
+        <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                  Editing Processed Image
+                </p>
+                <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                  The original image is not available. You are editing the processed version, which may have already been cropped and filtered.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {imageLoadError && (
+        <Card className="border-destructive bg-destructive/10">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-destructive">
+                  Image Load Error
+                </p>
+                <p className="text-xs text-destructive/80 mt-1">
+                  {imageLoadError}
+                </p>
+                {existingImageUrls.processed_url && !isUsingFallbackImage && (
+                  <p className="text-xs text-destructive/80 mt-2">
+                    The processed image may be available as a fallback.
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Image Editor</CardTitle>
@@ -1359,14 +1433,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                     className="hidden"
                     crossOrigin="anonymous"
                     onLoad={handleImageLoad}
-                    onError={(e) => {
-                      console.error('Failed to load image:', e);
-                      // If image fails to load, it might be a CORS issue or invalid URL
-                      // The error will be visible in the console for debugging
-                      if (imageUrl.startsWith('data:')) {
-                        console.error('Data URI detected - this should not happen. Image URL:', imageUrl.substring(0, 100));
-                      }
-                    }}
+                    onError={handleImageError}
                   />
                   
                   {/* Image strip area - react-easy-crop container spans all panels, constrained to middle section */}
