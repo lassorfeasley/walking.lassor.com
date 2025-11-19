@@ -98,60 +98,74 @@ export function cropImage(
  */
 export function rotateToLandscape(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
+    // Validate file is actually a File object
+    if (!(file instanceof File)) {
+      reject(new Error('Invalid file object'));
+      return;
+    }
+
     const img = new Image();
     const url = URL.createObjectURL(file);
 
+    // Set up error handler first
+    img.onerror = (error) => {
+      URL.revokeObjectURL(url);
+      console.error('Image load error:', error);
+      reject(new Error('Failed to load image. The file may be corrupted or in an unsupported format.'));
+    };
+
     img.onload = () => {
-      URL.revokeObjectURL(url);
+      try {
+        URL.revokeObjectURL(url);
 
-      // Check if image is portrait (height > width)
-      if (img.naturalHeight <= img.naturalWidth) {
-        // Already landscape, return original file
-        resolve(file);
-        return;
+        // Check if image is portrait (height > width)
+        if (img.naturalHeight <= img.naturalWidth) {
+          // Already landscape, return original file
+          resolve(file);
+          return;
+        }
+
+        // Portrait image - rotate 90° clockwise
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+
+        // Swap dimensions for 90° rotation
+        canvas.width = img.naturalHeight;
+        canvas.height = img.naturalWidth;
+
+        // Rotate and translate to position image correctly
+        ctx.translate(canvas.width, 0);
+        ctx.rotate(Math.PI / 2); // 90 degrees in radians
+        ctx.drawImage(img, 0, 0);
+
+        // Use toBlob instead of toDataURL to avoid data URI issues
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              // Create a new File with the rotated image
+              const rotatedFile = new File([blob], file.name, {
+                type: file.type || 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(rotatedFile);
+            } else {
+              reject(new Error('Failed to create blob from canvas'));
+            }
+          },
+          file.type || 'image/jpeg',
+          0.95
+        );
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error('Unknown error during image processing'));
       }
-
-      // Portrait image - rotate 90° clockwise
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      if (!ctx) {
-        reject(new Error('Could not get canvas context'));
-        return;
-      }
-
-      // Swap dimensions for 90° rotation
-      canvas.width = img.naturalHeight;
-      canvas.height = img.naturalWidth;
-
-      // Rotate and translate to position image correctly
-      ctx.translate(canvas.width, 0);
-      ctx.rotate(Math.PI / 2); // 90 degrees in radians
-      ctx.drawImage(img, 0, 0);
-
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            // Create a new File with the rotated image
-            const rotatedFile = new File([blob], file.name, {
-              type: file.type || 'image/jpeg',
-              lastModified: Date.now(),
-            });
-            resolve(rotatedFile);
-          } else {
-            reject(new Error('Failed to create blob'));
-          }
-        },
-        file.type || 'image/jpeg',
-        0.95
-      );
     };
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load image'));
-    };
-
+    // Set src after handlers are set up
     img.src = url;
   });
 }

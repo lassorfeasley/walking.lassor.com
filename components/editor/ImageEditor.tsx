@@ -910,6 +910,16 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     }
   }, [croppedAreaPixels, filters, panelCount, selectiveColor]);
 
+  // Validate imageUrl is a proper HTTP/HTTPS URL, not a data URI or local file
+  if (!imageUrl || imageUrl.startsWith('data:') || imageUrl.startsWith('file:')) {
+    return (
+      <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
+        <p className="font-medium">Invalid Image URL</p>
+        <p className="mt-2">The image URL is invalid or not accessible. Please try uploading again.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -946,6 +956,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                     onLoad={handleImageLoad}
                     onError={(e) => {
                       console.error('Failed to load image:', e);
+                      // If image fails to load, it might be a CORS issue or invalid URL
+                      // The error will be visible in the console for debugging
+                      if (imageUrl.startsWith('data:')) {
+                        console.error('Data URI detected - this should not happen. Image URL:', imageUrl.substring(0, 100));
+                      }
                     }}
                   />
                   
@@ -1201,8 +1216,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 onValueChange={(value) =>
                   setFilters((prev) => ({ ...prev, exposure: value[0] }))
                 }
-                min={-100}
-                max={100}
+                min={-20}
+                max={20}
                 step={0.1}
               />
             </div>
@@ -1216,8 +1231,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 onValueChange={(value) =>
                   setFilters((prev) => ({ ...prev, highlights: value[0] }))
                 }
-                min={-100}
-                max={100}
+                min={-20}
+                max={20}
                 step={0.1}
               />
             </div>
@@ -1231,8 +1246,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 onValueChange={(value) =>
                   setFilters((prev) => ({ ...prev, shadows: value[0] }))
                 }
-                min={-100}
-                max={100}
+                min={-20}
+                max={20}
                 step={0.1}
               />
             </div>

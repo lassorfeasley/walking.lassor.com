@@ -17,7 +17,12 @@ export default function EditPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoading: isAuthLoading } = useRequireAuth();
-  const imageUrl = decodeURIComponent(url);
+  const decodedUrl = decodeURIComponent(url);
+  
+  // Validate that the URL is a proper HTTP/HTTPS URL, not a data URI or local file
+  const imageUrl = decodedUrl.startsWith('data:') || decodedUrl.startsWith('file:') 
+    ? '' 
+    : decodedUrl;
   const imageId = searchParams.get('id') || undefined;
 
   if (isAuthLoading) {
@@ -54,7 +59,14 @@ export default function EditPage({
         </p>
       </div>
 
-      <ImageEditor imageUrl={imageUrl} imageId={imageId} onSave={handleSave} />
+      {imageUrl ? (
+        <ImageEditor imageUrl={imageUrl} imageId={imageId} onSave={handleSave} />
+      ) : (
+        <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
+          <p className="font-medium">Invalid Image URL</p>
+          <p className="mt-2">The image URL is invalid or not accessible. Please try uploading again.</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -54,6 +54,11 @@ export default function UploadPage() {
         throw new Error('Failed to upload file');
       }
 
+      // Validate that the result URL is a proper HTTP/HTTPS URL, not a data URI
+      if (!result.url || result.url.startsWith('data:')) {
+        throw new Error('Invalid image URL returned from upload');
+      }
+
       // TODO: Save metadata to database when schema is finalized
       // For now, we'll redirect to edit page with the image URL
       // In a real implementation, you'd create a database record and use its ID
