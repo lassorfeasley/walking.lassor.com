@@ -18,6 +18,32 @@ export interface PanoramaImage {
   updated_at?: string;
   posted_at?: string;
   instagram_post_id?: string;
+  adjustments?: ImageAdjustments;
+}
+
+export interface ImageAdjustments {
+  crop: { x: number; y: number };
+  zoom: number;
+  rotation: number;
+  filters: {
+    brightness: number;
+    contrast: number;
+    saturation: number;
+    exposure: number;
+    highlights: number;
+    shadows: number;
+  };
+  selectiveColor: {
+    selectedColor: 'red' | 'yellow' | 'green' | 'cyan' | 'blue' | 'magenta' | null;
+    adjustments: {
+      red: { saturation: number; luminance: number };
+      yellow: { saturation: number; luminance: number };
+      green: { saturation: number; luminance: number };
+      cyan: { saturation: number; luminance: number };
+      blue: { saturation: number; luminance: number };
+      magenta: { saturation: number; luminance: number };
+    };
+  };
 }
 
 export interface PanoramaPanel {
@@ -35,6 +61,7 @@ export interface EditorState {
     y: number;
     width: number;
     height: number;
+    // Added to match what is actually used in components, though EditorState might not be strictly used elsewhere
   };
   aspectRatio: '1:1' | '4:5' | '9:16' | 'free';
   filters: {
@@ -44,4 +71,3 @@ export interface EditorState {
   };
   zoom: number;
 }
-

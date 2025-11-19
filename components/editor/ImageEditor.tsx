@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
-import { RotateCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { RotateCw, ChevronDown, ChevronUp, Eye, RotateCcw } from 'lucide-react';
 import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, applySelectiveColorsCombined, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
 import { uploadFile, PROCESSED_BUCKET, OPTIMIZED_BUCKET } from '@/lib/supabase/storage';
 import { saveImageMetadata, getImageMetadata, getImageByUrl, getAllTags, savePanels } from '@/lib/supabase/database';
@@ -63,6 +63,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const [initialZoomSet, setInitialZoomSet] = useState(false);
   const [filteredPreviewUrl, setFilteredPreviewUrl] = useState<string | null>(null);
   const [isUpdatingPreview, setIsUpdatingPreview] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
   const [metadata, setMetadata] = useState<Partial<PanoramaImage>>({
     title: '',
     location_name: '',
@@ -466,6 +467,30 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
             tags: existing.tags,
             status: existing.status,
           });
+
+          // Restore visual adjustments if they exist
+          if (existing.adjustments) {
+            setCrop(existing.adjustments.crop);
+            setZoom(existing.adjustments.zoom);
+            setRotation(existing.adjustments.rotation);
+            setFilters(existing.adjustments.filters);
+            setSelectiveColor(existing.adjustments.selectiveColor);
+            
+            // Update refs so we don't detect false changes immediately
+            zoomRef.current = existing.adjustments.zoom;
+            
+            // Set initial visual state to match these loaded adjustments
+            // This ensures the "Has Visual Changes" check works correctly against the saved state
+            initialVisualStateRef.current = {
+              crop: existing.adjustments.crop,
+              zoom: existing.adjustments.zoom,
+              rotation: existing.adjustments.rotation,
+              filters: existing.adjustments.filters,
+              selectiveColor: existing.adjustments.selectiveColor,
+              panelCount: existing.panel_count || 3,
+              croppedAreaPixels: null // Will be populated by the cropper on mount
+            };
+          }
 
           // Store existing image URLs
           setExistingImageUrls({
@@ -904,6 +929,13 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         date_taken: metadata.date_taken!,
         tags: metadata.tags!,
         status: metadata.status!,
+        adjustments: {
+          crop,
+          zoom,
+          rotation,
+          filters,
+          selectiveColor
+        }
       };
 
       // Only include id if we're updating an existing record
@@ -934,7 +966,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [metadata, imageUrl, imageId, croppedAreaPixels, filters, panelCount, selectiveColor, onSave, imageRef, hasVisualChanges, existingImageUrls, calculateAdjustedCropArea, aspectRatioValue]);
+  }, [metadata, imageUrl, imageId, croppedAreaPixels, filters, panelCount, selectiveColor, onSave, imageRef, hasVisualChanges, existingImageUrls, calculateAdjustedCropArea, aspectRatioValue, crop, zoom, rotation]);
 
   const handleExportAndDownload = useCallback(async () => {
     if (!imageRef.current || !croppedAreaPixels) return;
@@ -1349,13 +1381,13 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                     <div 
                       className="relative w-full h-full"
                       style={{
-                        filter: `brightness(${Math.max(0, filters.brightness + filters.exposure)}%) contrast(${filters.contrast}%) saturate(${filters.saturation}%)`,
+                        filter: showOriginal ? 'none' : `brightness(${Math.max(0, filters.brightness + filters.exposure)}%) contrast(${filters.contrast}%) saturate(${filters.saturation}%)`,
                         opacity: isUpdatingPreview ? 0.7 : 1,
                         transition: 'opacity 0.2s ease-in-out'
                       }}
                     >
                       <Cropper
-                        image={filteredPreviewUrl || imageUrl}
+                        image={showOriginal ? imageUrl : (filteredPreviewUrl || imageUrl)}
                         crop={crop}
                         zoom={zoom}
                         rotation={rotation}
@@ -1567,6 +1599,23 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                   step={1}
                   className="flex-1"
                 />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={Math.round(rotation)}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value, 10);
+                      if (!isNaN(value) && value >= -180 && value <= 180) {
+                        setRotation(value);
+                      }
+                    }}
+                    className="w-16 h-8 text-xs text-center"
+                  />
+                  <span className="text-xs text-muted-foreground">°</span>
+                </div>
                 <Button
                   variant="outline"
                   size="icon"
@@ -1586,90 +1635,207 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
               <label className="text-sm font-medium text-foreground">
                 Brightness: {filters.brightness}%
               </label>
-              <Slider
-                value={[filters.brightness]}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, brightness: value[0] }))
-                }
-                min={0}
-                max={200}
-                step={1}
-              />
+              <div className="flex items-center gap-3">
+                <Slider
+                  value={[filters.brightness]}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, brightness: value[0] }))
+                  }
+                  min={0}
+                  max={200}
+                  step={1}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={200}
+                    step={1}
+                    value={Math.round(filters.brightness)}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value, 10);
+                      if (!isNaN(value) && value >= 0 && value <= 200) {
+                        setFilters((prev) => ({ ...prev, brightness: value }));
+                      }
+                    }}
+                    className="w-16 h-8 text-xs text-center"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Contrast: {filters.contrast}%
               </label>
-              <Slider
-                value={[filters.contrast]}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, contrast: value[0] }))
-                }
-                min={0}
-                max={200}
-                step={1}
-              />
+              <div className="flex items-center gap-3">
+                <Slider
+                  value={[filters.contrast]}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, contrast: value[0] }))
+                  }
+                  min={0}
+                  max={200}
+                  step={1}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={200}
+                    step={1}
+                    value={Math.round(filters.contrast)}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value, 10);
+                      if (!isNaN(value) && value >= 0 && value <= 200) {
+                        setFilters((prev) => ({ ...prev, contrast: value }));
+                      }
+                    }}
+                    className="w-16 h-8 text-xs text-center"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Saturation: {filters.saturation}%
               </label>
-              <Slider
-                value={[filters.saturation]}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, saturation: value[0] }))
-                }
-                min={0}
-                max={200}
-                step={1}
-              />
+              <div className="flex items-center gap-3">
+                <Slider
+                  value={[filters.saturation]}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, saturation: value[0] }))
+                  }
+                  min={0}
+                  max={200}
+                  step={1}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={200}
+                    step={1}
+                    value={Math.round(filters.saturation)}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value, 10);
+                      if (!isNaN(value) && value >= 0 && value <= 200) {
+                        setFilters((prev) => ({ ...prev, saturation: value }));
+                      }
+                    }}
+                    className="w-16 h-8 text-xs text-center"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Exposure: {filters.exposure > 0 ? '+' : ''}{filters.exposure.toFixed(1)}
               </label>
-              <Slider
-                value={[filters.exposure]}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, exposure: value[0] }))
-                }
-                min={-20}
-                max={20}
-                step={0.1}
-              />
+              <div className="flex items-center gap-3">
+                <Slider
+                  value={[filters.exposure]}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, exposure: value[0] }))
+                  }
+                  min={-20}
+                  max={20}
+                  step={0.1}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={-20}
+                    max={20}
+                    step={0.1}
+                    value={filters.exposure.toFixed(1)}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (!isNaN(value) && value >= -20 && value <= 20) {
+                        setFilters((prev) => ({ ...prev, exposure: value }));
+                      }
+                    }}
+                    className="w-16 h-8 text-xs text-center"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Highlights: {filters.highlights > 0 ? '+' : ''}{filters.highlights.toFixed(1)}
               </label>
-              <Slider
-                value={[filters.highlights]}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, highlights: value[0] }))
-                }
-                min={-20}
-                max={20}
-                step={0.1}
-              />
+              <div className="flex items-center gap-3">
+                <Slider
+                  value={[filters.highlights]}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, highlights: value[0] }))
+                  }
+                  min={-20}
+                  max={20}
+                  step={0.1}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={-20}
+                    max={20}
+                    step={0.1}
+                    value={filters.highlights.toFixed(1)}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (!isNaN(value) && value >= -20 && value <= 20) {
+                        setFilters((prev) => ({ ...prev, highlights: value }));
+                      }
+                    }}
+                    className="w-16 h-8 text-xs text-center"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Shadows: {filters.shadows > 0 ? '+' : ''}{filters.shadows.toFixed(1)}
               </label>
-              <Slider
-                value={[filters.shadows]}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, shadows: value[0] }))
-                }
-                min={-20}
-                max={20}
-                step={0.1}
-              />
+              <div className="flex items-center gap-3">
+                <Slider
+                  value={[filters.shadows]}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, shadows: value[0] }))
+                  }
+                  min={-20}
+                  max={20}
+                  step={0.1}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={-20}
+                    max={20}
+                    step={0.1}
+                    value={filters.shadows.toFixed(1)}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (!isNaN(value) && value >= -20 && value <= 20) {
+                        setFilters((prev) => ({ ...prev, shadows: value }));
+                      }
+                    }}
+                    className="w-16 h-8 text-xs text-center"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Selective Color Section */}
@@ -1733,24 +1899,52 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                           Saturation: {selectiveColor.adjustments[selectiveColor.selectedColor].saturation > 0 ? '+' : ''}
                           {selectiveColor.adjustments[selectiveColor.selectedColor].saturation.toFixed(1)}
                         </label>
-                        <Slider
-                          value={[selectiveColor.adjustments[selectiveColor.selectedColor].saturation]}
-                          onValueChange={(value) =>
-                            setSelectiveColor((prev) => ({
-                              ...prev,
-                              adjustments: {
-                                ...prev.adjustments,
-                                [prev.selectedColor!]: {
-                                  ...prev.adjustments[prev.selectedColor!],
-                                  saturation: value[0],
+                        <div className="flex items-center gap-3">
+                          <Slider
+                            value={[selectiveColor.adjustments[selectiveColor.selectedColor].saturation]}
+                            onValueChange={(value) =>
+                              setSelectiveColor((prev) => ({
+                                ...prev,
+                                adjustments: {
+                                  ...prev.adjustments,
+                                  [prev.selectedColor!]: {
+                                    ...prev.adjustments[prev.selectedColor!],
+                                    saturation: value[0],
+                                  },
                                 },
-                              },
-                            }))
-                          }
-                          min={-100}
-                          max={100}
-                          step={0.1}
-                        />
+                              }))
+                            }
+                            min={-100}
+                            max={100}
+                            step={0.1}
+                            className="flex-1"
+                          />
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Input
+                              type="number"
+                              min={-100}
+                              max={100}
+                              step={0.1}
+                              value={selectiveColor.adjustments[selectiveColor.selectedColor].saturation.toFixed(1)}
+                              onChange={(e) => {
+                                const value = parseFloat(e.target.value);
+                                if (!isNaN(value) && value >= -100 && value <= 100) {
+                                  setSelectiveColor((prev) => ({
+                                    ...prev,
+                                    adjustments: {
+                                      ...prev.adjustments,
+                                      [prev.selectedColor!]: {
+                                        ...prev.adjustments[prev.selectedColor!],
+                                        saturation: value,
+                                      },
+                                    },
+                                  }));
+                                }
+                              }}
+                              className="w-16 h-8 text-xs text-center"
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -1758,29 +1952,107 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                           Luminance: {selectiveColor.adjustments[selectiveColor.selectedColor].luminance > 0 ? '+' : ''}
                           {selectiveColor.adjustments[selectiveColor.selectedColor].luminance.toFixed(1)}
                         </label>
-                        <Slider
-                          value={[selectiveColor.adjustments[selectiveColor.selectedColor].luminance]}
-                          onValueChange={(value) =>
-                            setSelectiveColor((prev) => ({
-                              ...prev,
-                              adjustments: {
-                                ...prev.adjustments,
-                                [prev.selectedColor!]: {
-                                  ...prev.adjustments[prev.selectedColor!],
-                                  luminance: value[0],
+                        <div className="flex items-center gap-3">
+                          <Slider
+                            value={[selectiveColor.adjustments[selectiveColor.selectedColor].luminance]}
+                            onValueChange={(value) =>
+                              setSelectiveColor((prev) => ({
+                                ...prev,
+                                adjustments: {
+                                  ...prev.adjustments,
+                                  [prev.selectedColor!]: {
+                                    ...prev.adjustments[prev.selectedColor!],
+                                    luminance: value[0],
+                                  },
                                 },
-                              },
-                            }))
-                          }
-                          min={-100}
-                          max={100}
-                          step={0.1}
-                        />
+                              }))
+                            }
+                            min={-100}
+                            max={100}
+                            step={0.1}
+                            className="flex-1"
+                          />
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Input
+                              type="number"
+                              min={-100}
+                              max={100}
+                              step={0.1}
+                              value={selectiveColor.adjustments[selectiveColor.selectedColor].luminance.toFixed(1)}
+                              onChange={(e) => {
+                                const value = parseFloat(e.target.value);
+                                if (!isNaN(value) && value >= -100 && value <= 100) {
+                                  setSelectiveColor((prev) => ({
+                                    ...prev,
+                                    adjustments: {
+                                      ...prev.adjustments,
+                                      [prev.selectedColor!]: {
+                                        ...prev.adjustments[prev.selectedColor!],
+                                        luminance: value,
+                                      },
+                                    },
+                                  }));
+                                }
+                              }}
+                              className="w-16 h-8 text-xs text-center"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-5 border-t border-border space-y-2">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onMouseDown={() => setShowOriginal(true)}
+                  onMouseUp={() => setShowOriginal(false)}
+                  onMouseLeave={() => setShowOriginal(false)}
+                  onTouchStart={() => setShowOriginal(true)}
+                  onTouchEnd={() => setShowOriginal(false)}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Original
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setCrop({ x: 0, y: 0 });
+                    setZoom(1);
+                    setRotation(0);
+                    setFilters({
+                      brightness: 100,
+                      contrast: 100,
+                      saturation: 100,
+                      exposure: 0,
+                      highlights: 0,
+                      shadows: 0,
+                    });
+                    setSelectiveColor({
+                      selectedColor: 'red',
+                      adjustments: {
+                        red: { saturation: 0, luminance: 0 },
+                        yellow: { saturation: 0, luminance: 0 },
+                        green: { saturation: 0, luminance: 0 },
+                        cyan: { saturation: 0, luminance: 0 },
+                        blue: { saturation: 0, luminance: 0 },
+                        magenta: { saturation: 0, luminance: 0 },
+                      },
+                    });
+                    zoomRef.current = 1;
+                  }}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset All
+                </Button>
+              </div>
             </div>
 
             {/* Metadata Form */}
@@ -1813,4 +2085,3 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     </div>
   );
 }
-
