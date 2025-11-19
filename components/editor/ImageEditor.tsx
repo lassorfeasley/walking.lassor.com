@@ -26,6 +26,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [croppedAreaRelative, setCroppedAreaRelative] = useState<any>(null);
+  const [adjustedCropArea, setAdjustedCropArea] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [panelCount, setPanelCount] = useState<number>(3);
   const [filters, setFilters] = useState({
     brightness: 100,
@@ -107,6 +109,48 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     return imageStripWidth / imageStripHeight;
   }, [panelCount]);
 
+  // Calculate adjusted crop area to match required aspect ratio
+  const calculateAdjustedCropArea = useCallback((
+    cropArea: { x: number; y: number; width: number; height: number },
+    imageWidth: number,
+    imageHeight: number
+  ): { x: number; y: number; width: number; height: number } => {
+    const requiredAspectRatio = aspectRatioValue();
+    const currentAspectRatio = cropArea.width / cropArea.height;
+    
+    // If aspect ratio already matches (within tolerance), return as-is
+    if (Math.abs(currentAspectRatio - requiredAspectRatio) <= 0.01) {
+      return cropArea;
+    }
+    
+    // Need to adjust to match required aspect ratio
+    // Keep the center position, adjust dimensions
+    const centerX = cropArea.x + cropArea.width / 2;
+    const centerY = cropArea.y + cropArea.height / 2;
+    
+    // Calculate new dimensions based on required aspect ratio
+    // Try to maintain the selected height, adjust width
+    let newWidth = cropArea.height * requiredAspectRatio;
+    let newHeight = cropArea.height;
+    
+    // If new width exceeds image bounds, adjust height instead
+    if (newWidth > imageWidth) {
+      newHeight = imageWidth / requiredAspectRatio;
+      newWidth = imageWidth;
+    }
+    
+    // Calculate new position to keep center
+    const newX = Math.max(0, Math.min(centerX - newWidth / 2, imageWidth - newWidth));
+    const newY = Math.max(0, Math.min(centerY - newHeight / 2, imageHeight - newHeight));
+    
+    return {
+      x: newX,
+      y: newY,
+      width: newWidth,
+      height: newHeight,
+    };
+  }, [aspectRatioValue]);
+
   // Calculate initial zoom so image fills the full width of the panels
   // react-easy-crop's zoom is relative to the "fit" size (zoom = 1.0 means fit to container)
   // To fill width, we calculate: zoom = (container width / image width) / (fit zoom)
@@ -150,10 +194,36 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
   const onCropComplete = useCallback(
     (croppedArea: any, croppedAreaPixels: any) => {
+      console.log('=== CROP COMPLETE DEBUG ===');
+      console.log('croppedArea (relative):', croppedArea);
+      console.log('croppedAreaPixels (absolute):', croppedAreaPixels);
+      console.log('imageRef dimensions:', {
+        naturalWidth: imageRef.current?.naturalWidth,
+        naturalHeight: imageRef.current?.naturalHeight,
+        clientWidth: imageRef.current?.clientWidth,
+        clientHeight: imageRef.current?.clientHeight,
+      });
+      console.log('aspectRatio:', aspectRatioValue());
+      console.log('panelCount:', panelCount);
+      console.log('zoom:', zoom);
+      console.log('rotation:', rotation);
       // Use react-easy-crop's accurate calculation
       setCroppedAreaPixels(croppedAreaPixels);
+      setCroppedAreaRelative(croppedArea);
+      
+      // Calculate adjusted crop area for preview overlay
+      if (imageRef.current && imageRef.current.naturalWidth > 0 && croppedAreaPixels) {
+        const adjusted = calculateAdjustedCropArea(
+          croppedAreaPixels,
+          imageRef.current.naturalWidth,
+          imageRef.current.naturalHeight
+        );
+        setAdjustedCropArea(adjusted);
+      } else {
+        setAdjustedCropArea(null);
+      }
     },
-    []
+    [aspectRatioValue, panelCount, zoom, rotation, calculateAdjustedCropArea]
   );
 
   // Also update crop area during dragging for real-time preview
@@ -444,6 +514,18 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     }
   }, [imageRef.current?.complete, croppedAreaPixels]);
 
+  // Update adjusted crop area when image dimensions or panel count changes
+  useEffect(() => {
+    if (imageRef.current && imageRef.current.naturalWidth > 0 && croppedAreaPixels) {
+      const adjusted = calculateAdjustedCropArea(
+        croppedAreaPixels,
+        imageRef.current.naturalWidth,
+        imageRef.current.naturalHeight
+      );
+      setAdjustedCropArea(adjusted);
+    }
+  }, [croppedAreaPixels, panelCount, imageRef.current?.naturalWidth, imageRef.current?.naturalHeight, calculateAdjustedCropArea]);
+
   // Check if visual changes have been made
   const hasVisualChanges = useCallback((): boolean => {
     const initial = initialVisualStateRef.current;
@@ -635,10 +717,60 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           };
         });
 
-        // Crop to the exact area selected (Cropper already enforces correct aspect ratio)
-        // Don't force output dimensions - it causes distortion
+        console.log('=== BEFORE CROP DEBUG ===');
+        console.log('croppedAreaPixels to use:', croppedAreaPixels);
+        console.log('filteredImg dimensions:', {
+          naturalWidth: filteredImg.naturalWidth,
+          naturalHeight: filteredImg.naturalHeight,
+        });
+        console.log('imageRef dimensions:', {
+          naturalWidth: imageRef.current?.naturalWidth,
+          naturalHeight: imageRef.current?.naturalHeight,
+        });
+        console.log('Expected crop area:', {
+          x: croppedAreaPixels.x,
+          y: croppedAreaPixels.y,
+          width: croppedAreaPixels.width,
+          height: croppedAreaPixels.height,
+          right: croppedAreaPixels.x + croppedAreaPixels.width,
+          bottom: croppedAreaPixels.y + croppedAreaPixels.height,
+        });
+        console.log('Image bounds check:', {
+          withinWidth: (croppedAreaPixels.x + croppedAreaPixels.width) <= filteredImg.naturalWidth,
+          withinHeight: (croppedAreaPixels.y + croppedAreaPixels.height) <= filteredImg.naturalHeight,
+        });
+        console.log('Aspect ratio analysis:', {
+          requiredAspectRatio: aspectRatioValue(),
+          imageAspectRatio: filteredImg.naturalWidth / filteredImg.naturalHeight,
+          cropAspectRatio: croppedAreaPixels.width / croppedAreaPixels.height,
+          imageWidth: filteredImg.naturalWidth,
+          cropWidth: croppedAreaPixels.width,
+          widthDifference: filteredImg.naturalWidth - croppedAreaPixels.width,
+          leftCrop: croppedAreaPixels.x,
+          rightCrop: filteredImg.naturalWidth - (croppedAreaPixels.x + croppedAreaPixels.width),
+        });
+
+        // Apply aspect ratio constraint programmatically
+        // The cropper now allows free selection, but we need to enforce the panel aspect ratio
+        const finalCropArea = calculateAdjustedCropArea(
+          croppedAreaPixels,
+          filteredImg.naturalWidth,
+          filteredImg.naturalHeight
+        );
+        
+        console.log('Aspect ratio adjustment:', {
+          original: croppedAreaPixels,
+          adjusted: finalCropArea,
+          requiredAspectRatio: aspectRatioValue(),
+          originalAspectRatio: croppedAreaPixels.width / croppedAreaPixels.height,
+          adjustedAspectRatio: finalCropArea.width / finalCropArea.height,
+        });
+
+        // Crop to the exact area selected, with aspect ratio enforced
         // Use PNG for truly lossless quality (for archival and print quality)
-        const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, undefined, 'png');
+        // Note: croppedAreaPixels coordinates are relative to original image dimensions
+        // since we always use imageUrl in the Cropper component
+        const croppedBlob = await cropImage(filteredImg, finalCropArea, undefined, 'png');
         
         // Revoke URL after image is used
         URL.revokeObjectURL(filteredImgUrl);
@@ -780,7 +912,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [metadata, imageUrl, imageId, croppedAreaPixels, filters, panelCount, selectiveColor, onSave, imageRef, hasVisualChanges, existingImageUrls]);
+  }, [metadata, imageUrl, imageId, croppedAreaPixels, filters, panelCount, selectiveColor, onSave, imageRef, hasVisualChanges, existingImageUrls, calculateAdjustedCropArea, aspectRatioValue]);
 
   const handleExportAndDownload = useCallback(async () => {
     if (!imageRef.current || !croppedAreaPixels) return;
@@ -894,11 +1026,21 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         };
       });
 
+      // Apply aspect ratio constraint programmatically
+      // The cropper now allows free selection, but we need to enforce the panel aspect ratio
+      const finalCropArea = calculateAdjustedCropArea(
+        croppedAreaPixels,
+        filteredImg.naturalWidth,
+        filteredImg.naturalHeight
+      );
+
       // Calculate output dimensions based on panel count
       const outputDimensions = getPanelDimensions(panelCount, 1080);
 
       // Crop the image (use JPEG for export/download to reduce file size)
-      const croppedBlob = await cropImage(filteredImg, croppedAreaPixels, outputDimensions, 'jpeg', 0.95);
+      // Note: croppedAreaPixels coordinates are relative to original image dimensions
+      // since we always use imageUrl in the Cropper component
+      const croppedBlob = await cropImage(filteredImg, finalCropArea, outputDimensions, 'jpeg', 0.95);
       
       // Revoke URL after image is used
       URL.revokeObjectURL(filteredImgUrl);
@@ -1117,7 +1259,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [croppedAreaPixels, filters, panelCount, selectiveColor]);
+  }, [croppedAreaPixels, filters, panelCount, selectiveColor, calculateAdjustedCropArea]);
 
   // Validate imageUrl is a proper HTTP/HTTPS URL, not a data URI or local file
   if (!imageUrl || imageUrl.startsWith('data:') || imageUrl.startsWith('file:')) {
@@ -1191,11 +1333,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                       }}
                     >
                       <Cropper
-                        image={filteredPreviewUrl || imageUrl}
+                        image={imageUrl}
                         crop={crop}
                         zoom={zoom}
                         rotation={rotation}
-                        aspect={aspectRatioValue()}
+                        aspect={undefined}
                         onCropChange={onCropChange}
                         onZoomChange={(newZoom) => {
                           setZoom(newZoom);
@@ -1206,6 +1348,53 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                         cropShape="rect"
                         zoomWithScroll={false}
                       />
+                      {/* Adjusted crop area overlay - shows what will actually be cropped */}
+                      {adjustedCropArea && croppedAreaPixels && croppedAreaRelative && imageRef.current && imageRef.current.naturalWidth > 0 && (
+                        (() => {
+                          // Calculate the relationship between absolute and relative coordinates
+                          // The relative coordinates are percentages of the cropper container
+                          // The absolute coordinates are pixels in the original image
+                          // We need to find how the image is displayed to convert between them
+                          
+                          // Calculate scale factors: how much the relative area represents in absolute pixels
+                          const relativeToAbsoluteScaleX = croppedAreaPixels.width / croppedAreaRelative.width;
+                          const relativeToAbsoluteScaleY = croppedAreaPixels.height / croppedAreaRelative.height;
+                          
+                          // Calculate the offset in relative coordinates
+                          // Convert absolute offset to relative offset using the scale
+                          const offsetXAbsolute = adjustedCropArea.x - croppedAreaPixels.x;
+                          const offsetYAbsolute = adjustedCropArea.y - croppedAreaPixels.y;
+                          const offsetXRelative = offsetXAbsolute / relativeToAbsoluteScaleX;
+                          const offsetYRelative = offsetYAbsolute / relativeToAbsoluteScaleY;
+                          
+                          // Calculate scale factors for width/height
+                          const scaleX = adjustedCropArea.width / croppedAreaPixels.width;
+                          const scaleY = adjustedCropArea.height / croppedAreaPixels.height;
+                          
+                          // Apply to relative coordinates
+                          const adjustedRelativeX = croppedAreaRelative.x + offsetXRelative;
+                          const adjustedRelativeY = croppedAreaRelative.y + offsetYRelative;
+                          const adjustedRelativeWidth = croppedAreaRelative.width * scaleX;
+                          const adjustedRelativeHeight = croppedAreaRelative.height * scaleY;
+                          
+                          return (
+                            <div
+                              className="absolute pointer-events-none z-30 border-2 border-yellow-400 border-dashed"
+                              style={{
+                                left: `${adjustedRelativeX}%`,
+                                top: `${adjustedRelativeY}%`,
+                                width: `${adjustedRelativeWidth}%`,
+                                height: `${adjustedRelativeHeight}%`,
+                                boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 8px rgba(251, 191, 36, 0.6)',
+                              }}
+                            >
+                              <div className="absolute -top-6 left-0 bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded font-medium whitespace-nowrap">
+                                Final crop area
+                              </div>
+                            </div>
+                          );
+                        })()
+                      )}
                       {/* Loading indicator overlay */}
                       {isUpdatingPreview && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/5 pointer-events-none z-20">
