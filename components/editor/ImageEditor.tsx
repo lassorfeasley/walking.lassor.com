@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { RotateCw, ChevronDown, ChevronUp } from 'lucide-react';
-import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
+import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, applySelectiveColorsCombined, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
 import { uploadFile, PROCESSED_BUCKET, OPTIMIZED_BUCKET } from '@/lib/supabase/storage';
 import { saveImageMetadata, getImageMetadata, getImageByUrl, getAllTags, savePanels } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
@@ -78,6 +78,9 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const prevPanelCountRef = useRef<number>(panelCount);
   const previewUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previewUpdateInProgressRef = useRef(false);
+  const previewUpdateCancelRef = useRef(false);
+  const filteredPreviewUrlRef = useRef<string | null>(null);
   
   // Track initial visual state to detect changes
   const initialVisualStateRef = useRef<{
@@ -241,22 +244,20 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const updateFilteredPreview = useCallback(async () => {
     if (!imageRef.current || !imageRef.current.complete) return;
 
+    // Check if update was cancelled
+    if (previewUpdateCancelRef.current) {
+      previewUpdateCancelRef.current = false;
+      return;
+    }
+
+    previewUpdateInProgressRef.current = true;
     setIsUpdatingPreview(true);
 
-    // Use requestAnimationFrame for smoother rendering
-    requestAnimationFrame(() => {
+    try {
       const img = imageRef.current;
-      if (!img || !img.complete) {
-        setIsUpdatingPreview(false);
-        return;
-      }
-
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        setIsUpdatingPreview(false);
-        return;
-      }
+      if (!ctx) throw new Error('No canvas context');
 
       // Optimize: Use smaller canvas for preview (max 1920px width)
       const MAX_PREVIEW_WIDTH = 1920;
@@ -265,19 +266,23 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       canvas.height = Math.round(img.naturalHeight * scale);
 
       // Apply CSS filters first (fast, GPU-accelerated)
-      const effectiveBrightness = Math.max(0, filters.brightness + filters.exposure);
-      ctx.filter = [
-        `brightness(${effectiveBrightness}%)`,
-        `contrast(${filters.contrast}%)`,
-        `saturate(${filters.saturation}%)`,
-      ].join(' ');
+      // Note: We NO LONGER apply brightness/contrast/saturation here for the preview blob.
+      // Instead, we apply them via CSS on the container so they are instant.
+      // This prevents "baked" filters from doubling up with CSS filters, and makes sliders instant.
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       // Check if we need pixel-based filters
       const hasHighlightsShadows = filters.highlights !== 0 || filters.shadows !== 0;
-      const hasSelectiveColor = Object.values(selectiveColor.adjustments).some(
-        (adj) => adj.saturation !== 0 || adj.luminance !== 0
-      );
+      
+      // OPTIMIZATION: Only collect active selective colors (skip colors with 0 adjustments)
+      const activeSelectiveColors: Array<{ color: string; saturation: number; luminance: number }> = [];
+      (['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'] as const).forEach((color) => {
+        const adj = selectiveColor.adjustments[color];
+        if (adj.saturation !== 0 || adj.luminance !== 0) {
+          activeSelectiveColors.push({ color, saturation: adj.saturation, luminance: adj.luminance });
+        }
+      });
+      const hasSelectiveColor = activeSelectiveColors.length > 0;
 
       // Optimize: Get ImageData once, apply all pixel-based filters, put back once
       if (hasHighlightsShadows || hasSelectiveColor) {
@@ -288,59 +293,75 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           applyHighlightsShadows(imageData, filters.highlights, filters.shadows);
         }
 
-        // Apply selective color adjustments for all active colors
+        // OPTIMIZATION: Use combined function for single-pass selective color processing
         if (hasSelectiveColor) {
-          (['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'] as const).forEach((color) => {
-            const adj = selectiveColor.adjustments[color];
-            if (adj.saturation !== 0 || adj.luminance !== 0) {
-              applySelectiveColor(imageData, color, adj.saturation, adj.luminance);
-            }
-          });
+          applySelectiveColorsCombined(imageData, activeSelectiveColors);
         }
 
         // Put ImageData back once after all filters are applied
         ctx.putImageData(imageData, 0, 0);
       }
 
+      // Check cancellation before creating blob
+      if (previewUpdateCancelRef.current) return;
+
       // Optimize: Lower JPEG quality for preview (0.75 instead of 0.95)
-      // Export still uses 0.95 quality
-      canvas.toBlob((blob) => {
-        if (blob) {
-          setFilteredPreviewUrl((prevUrl) => {
-            // Revoke previous URL
-            if (prevUrl) {
-              URL.revokeObjectURL(prevUrl);
-            }
-            return URL.createObjectURL(blob);
-          });
-        }
+      const blob = await new Promise<Blob | null>(resolve => 
+        canvas.toBlob(resolve, 'image/jpeg', 0.75)
+      );
+
+      // Final cancellation check before updating state
+      if (previewUpdateCancelRef.current) return;
+
+      if (blob) {
+        setFilteredPreviewUrl((prevUrl) => {
+          if (prevUrl) URL.revokeObjectURL(prevUrl);
+          const newUrl = URL.createObjectURL(blob);
+          filteredPreviewUrlRef.current = newUrl;
+          return newUrl;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to update preview:', error);
+    } finally {
+      if (!previewUpdateCancelRef.current) {
+        previewUpdateInProgressRef.current = false;
         setIsUpdatingPreview(false);
-      }, 'image/jpeg', 0.75);
-    });
-  }, [filters.highlights, filters.shadows, filters.brightness, filters.contrast, filters.saturation, filters.exposure, selectiveColor.adjustments]);
+      }
+    }
+  }, [filters.highlights, filters.shadows, selectiveColor.adjustments]);
 
   // Debounced update of filtered preview when filters change
   useEffect(() => {
+    // Cancel any pending timeout
     if (previewUpdateTimeoutRef.current) {
       clearTimeout(previewUpdateTimeoutRef.current);
     }
     
-    // Update if highlights/shadows or selective color are active
+    // Mark that we want to cancel any in-progress update
+    previewUpdateCancelRef.current = true;
+    
+    // Check if pixel-based filters are active
     const hasHighlightsShadows = filters.highlights !== 0 || filters.shadows !== 0;
     const hasSelectiveColor = Object.values(selectiveColor.adjustments).some(
       (adj) => adj.saturation !== 0 || adj.luminance !== 0
     );
+    const hasPixelBasedFilters = hasHighlightsShadows || hasSelectiveColor;
     
-    if (hasHighlightsShadows || hasSelectiveColor) {
+    // IMPORTANT: Always update preview if Pixel-based filters are active
+    // If only CSS filters are active, we can clear the preview URL and use CSS filters on the element for better performance
+    if (hasPixelBasedFilters) {
       previewUpdateTimeoutRef.current = setTimeout(() => {
+        previewUpdateCancelRef.current = false;
         updateFilteredPreview();
-      }, 300); // Debounce by 300ms (increased from 150ms for better performance)
+      }, 200); // Reduced from 300ms for more responsive preview
     } else {
       // Clean up preview URL if no canvas-based filters are active
       setFilteredPreviewUrl((prevUrl) => {
         if (prevUrl) {
           URL.revokeObjectURL(prevUrl);
         }
+        filteredPreviewUrlRef.current = null;
         return null;
       });
     }
@@ -349,8 +370,9 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       if (previewUpdateTimeoutRef.current) {
         clearTimeout(previewUpdateTimeoutRef.current);
       }
+      previewUpdateCancelRef.current = true;
     };
-  }, [filters.highlights, filters.shadows, filters.brightness, filters.contrast, filters.saturation, filters.exposure, selectiveColor.adjustments, updateFilteredPreview]);
+  }, [filters.highlights, filters.shadows, selectiveColor.adjustments, updateFilteredPreview]);
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
@@ -1327,13 +1349,13 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                     <div 
                       className="relative w-full h-full"
                       style={{
-                        filter: filteredPreviewUrl ? 'none' : `brightness(${Math.max(0, filters.brightness + filters.exposure)}%) contrast(${filters.contrast}%) saturate(${filters.saturation}%)`,
+                        filter: `brightness(${Math.max(0, filters.brightness + filters.exposure)}%) contrast(${filters.contrast}%) saturate(${filters.saturation}%)`,
                         opacity: isUpdatingPreview ? 0.7 : 1,
                         transition: 'opacity 0.2s ease-in-out'
                       }}
                     >
                       <Cropper
-                        image={imageUrl}
+                        image={filteredPreviewUrl || imageUrl}
                         crop={crop}
                         zoom={zoom}
                         rotation={rotation}

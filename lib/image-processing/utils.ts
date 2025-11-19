@@ -436,6 +436,62 @@ export function applySelectiveColor(
 }
 
 /**
+ * Apply multiple selective color adjustments in a single optimized pass
+ * This is more efficient than calling applySelectiveColor multiple times
+ * @param imageData ImageData from canvas context
+ * @param adjustments Array of color adjustments: { color: string, saturation: number, luminance: number }
+ */
+export function applySelectiveColorsCombined(
+  imageData: ImageData,
+  adjustments: Array<{ color: string; saturation: number; luminance: number }>
+): void {
+  if (adjustments.length === 0) return;
+  
+  const data = imageData.data;
+  const range = 100; // Default range (full color range)
+  
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    
+    // Convert to HSL once per pixel (instead of once per color)
+    const hsl = rgbToHsl(r, g, b);
+    
+    // Apply all active color adjustments to this pixel
+    let totalSaturationDelta = 0;
+    let totalLuminanceDelta = 0;
+    let maxWeight = 0;
+    
+    for (const { color, saturation, luminance } of adjustments) {
+      const maskWeight = calculateColorMask(hsl.h, color, range);
+      if (maskWeight > 0) {
+        totalSaturationDelta += (saturation / 100) * 100 * maskWeight;
+        totalLuminanceDelta += (luminance / 100) * 100 * maskWeight;
+        maxWeight = Math.max(maxWeight, maskWeight);
+      }
+    }
+    
+    // Apply combined adjustments if any color matched
+    if (maxWeight > 0) {
+      let newS = hsl.s + totalSaturationDelta;
+      newS = Math.max(0, Math.min(100, newS));
+      
+      let newL = hsl.l + totalLuminanceDelta;
+      newL = Math.max(0, Math.min(100, newL));
+      
+      // Convert back to RGB once
+      const rgb = hslToRgb(hsl.h, newS, newL);
+      
+      // Blend with original based on max weight
+      data[i] = Math.round(r + (rgb.r - r) * maxWeight);
+      data[i + 1] = Math.round(g + (rgb.g - g) * maxWeight);
+      data[i + 2] = Math.round(b + (rgb.b - b) * maxWeight);
+    }
+  }
+}
+
+/**
  * Generate web-optimized version of an image
  * @param image The image element
  * @param maxWidth Maximum width in pixels
