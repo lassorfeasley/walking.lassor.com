@@ -76,6 +76,25 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const prevPanelCountRef = useRef<number>(panelCount);
   const previewUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track initial visual state to detect changes
+  const initialVisualStateRef = useRef<{
+    crop: { x: number; y: number };
+    zoom: number;
+    rotation: number;
+    filters: typeof filters;
+    selectiveColor: typeof selectiveColor;
+    panelCount: number;
+    croppedAreaPixels: any;
+  } | null>(null);
+  
+  // Store existing image URLs from database
+  const [existingImageUrls, setExistingImageUrls] = useState<{
+    processed_url?: string;
+    thumbnail_url?: string;
+    preview_url?: string;
+    panel_count?: number;
+  }>({});
 
   const aspectRatioValue = useCallback(() => {
     // Calculate aspect ratio for the image strip area (excluding white blocks)
@@ -334,36 +353,46 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         const tags = await getAllTags();
         setExistingTags(tags);
 
+        let existing: PanoramaImage | null = null;
+
         // Load existing metadata if imageId provided
         if (imageId) {
-          const existing = await getImageMetadata(imageId);
-          if (existing) {
-            setMetadata({
-              title: existing.title,
-              location_name: existing.location_name,
-              latitude: existing.latitude,
-              longitude: existing.longitude,
-              description: existing.description,
-              date_taken: existing.date_taken,
-              tags: existing.tags,
-              status: existing.status,
-            });
-          }
+          existing = await getImageMetadata(imageId);
         } else {
           // Try to find by URL
-          const existing = await getImageByUrl(imageUrl);
-          if (existing) {
-            setMetadata({
-              title: existing.title,
-              location_name: existing.location_name,
-              latitude: existing.latitude,
-              longitude: existing.longitude,
-              description: existing.description,
-              date_taken: existing.date_taken,
-              tags: existing.tags,
-              status: existing.status,
-            });
+          existing = await getImageByUrl(imageUrl);
+        }
+
+        if (existing) {
+          setMetadata({
+            title: existing.title,
+            location_name: existing.location_name,
+            latitude: existing.latitude,
+            longitude: existing.longitude,
+            description: existing.description,
+            date_taken: existing.date_taken,
+            tags: existing.tags,
+            status: existing.status,
+          });
+
+          // Store existing image URLs
+          setExistingImageUrls({
+            processed_url: existing.processed_url,
+            thumbnail_url: existing.thumbnail_url,
+            preview_url: existing.preview_url,
+            panel_count: existing.panel_count,
+          });
+
+          // Set panel count from existing if available
+          if (existing.panel_count) {
+            setPanelCount(existing.panel_count);
           }
+
+          // Note: Initial visual state will be set when croppedAreaPixels is first calculated
+          // See useEffect below that watches for croppedAreaPixels
+        } else {
+          // New image - reset existing URLs
+          setExistingImageUrls({});
         }
       } catch (error) {
         console.error('Error loading metadata:', error);
@@ -376,6 +405,37 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   }, [imageId, imageUrl]);
 
 
+  // Initialize visual state when croppedAreaPixels is first set (for existing images)
+  useEffect(() => {
+    if (
+      croppedAreaPixels &&
+      imageRef.current &&
+      initialVisualStateRef.current === null &&
+      (existingImageUrls.processed_url || imageId)
+    ) {
+      // This is an existing image and we're setting the initial visual state
+      initialVisualStateRef.current = {
+        crop: { ...crop },
+        zoom,
+        rotation,
+        filters: { ...filters },
+        selectiveColor: {
+          selectedColor: selectiveColor.selectedColor,
+          adjustments: {
+            red: { ...selectiveColor.adjustments.red },
+            yellow: { ...selectiveColor.adjustments.yellow },
+            green: { ...selectiveColor.adjustments.green },
+            cyan: { ...selectiveColor.adjustments.cyan },
+            blue: { ...selectiveColor.adjustments.blue },
+            magenta: { ...selectiveColor.adjustments.magenta },
+          },
+        },
+        panelCount: existingImageUrls.panel_count || panelCount,
+        croppedAreaPixels: { ...croppedAreaPixels },
+      };
+    }
+  }, [croppedAreaPixels, imageId, existingImageUrls.processed_url, existingImageUrls.panel_count, crop, zoom, rotation, filters, selectiveColor, panelCount]);
+
   // Trigger initial crop calculation when image loads
   useEffect(() => {
     if (imageRef.current && imageRef.current.complete && !croppedAreaPixels) {
@@ -383,6 +443,78 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       // If not, user interaction will trigger it
     }
   }, [imageRef.current?.complete, croppedAreaPixels]);
+
+  // Check if visual changes have been made
+  const hasVisualChanges = useCallback((): boolean => {
+    const initial = initialVisualStateRef.current;
+    
+    // If no initial state recorded, assume it's a new image (always regenerate)
+    if (!initial) {
+      return true;
+    }
+
+    // Check crop position
+    if (Math.abs(crop.x - initial.crop.x) > 0.1 || Math.abs(crop.y - initial.crop.y) > 0.1) {
+      return true;
+    }
+
+    // Check zoom
+    if (Math.abs(zoom - initial.zoom) > 0.01) {
+      return true;
+    }
+
+    // Check rotation
+    if (rotation !== initial.rotation) {
+      return true;
+    }
+
+    // Check filters
+    if (
+      Math.abs(filters.brightness - initial.filters.brightness) > 0.1 ||
+      Math.abs(filters.contrast - initial.filters.contrast) > 0.1 ||
+      Math.abs(filters.saturation - initial.filters.saturation) > 0.1 ||
+      Math.abs(filters.exposure - initial.filters.exposure) > 0.1 ||
+      Math.abs(filters.highlights - initial.filters.highlights) > 0.1 ||
+      Math.abs(filters.shadows - initial.filters.shadows) > 0.1
+    ) {
+      return true;
+    }
+
+    // Check selective color adjustments
+    const colorKeys: Array<keyof typeof selectiveColor.adjustments> = ['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'];
+    for (const color of colorKeys) {
+      const current = selectiveColor.adjustments[color];
+      const initialAdj = initial.selectiveColor.adjustments[color];
+      if (
+        Math.abs(current.saturation - initialAdj.saturation) > 0.1 ||
+        Math.abs(current.luminance - initialAdj.luminance) > 0.1
+      ) {
+        return true;
+      }
+    }
+
+    // Check panel count
+    if (panelCount !== initial.panelCount) {
+      return true;
+    }
+
+    // Check croppedAreaPixels (crop size/position)
+    if (croppedAreaPixels && initial.croppedAreaPixels) {
+      if (
+        Math.abs(croppedAreaPixels.x - initial.croppedAreaPixels.x) > 0.1 ||
+        Math.abs(croppedAreaPixels.y - initial.croppedAreaPixels.y) > 0.1 ||
+        Math.abs(croppedAreaPixels.width - initial.croppedAreaPixels.width) > 0.1 ||
+        Math.abs(croppedAreaPixels.height - initial.croppedAreaPixels.height) > 0.1
+      ) {
+        return true;
+      }
+    } else if (croppedAreaPixels !== initial.croppedAreaPixels) {
+      // One is null and the other isn't
+      return true;
+    }
+
+    return false;
+  }, [crop, zoom, rotation, filters, selectiveColor, panelCount, croppedAreaPixels]);
 
   const handleSave = useCallback(async () => {
     // Validate required metadata fields
@@ -394,12 +526,18 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
     setIsProcessing(true);
     try {
+      // Check if visual changes were made
+      const visualChangesDetected = hasVisualChanges();
+      const hasExistingUrls = !!existingImageUrls.processed_url;
+      const panelCountChanged = existingImageUrls.panel_count !== undefined && panelCount !== existingImageUrls.panel_count;
+      
       // First, export the processed image if needed
       let processedUrl = imageUrl;
       let thumbnailUrl: string | undefined;
       let previewUrl: string | undefined;
       
-      if (croppedAreaPixels && imageRef.current) {
+      // Only regenerate images if visual changes were detected, panel count changed, or if no existing URLs exist
+      if ((visualChangesDetected || panelCountChanged) && croppedAreaPixels && imageRef.current) {
         // Process and upload the image
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -554,11 +692,17 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
             previewUrl = previewResult.url;
           }
         }
+      } else if (!visualChangesDetected && !panelCountChanged && hasExistingUrls) {
+        // No visual changes detected - use existing URLs
+        processedUrl = existingImageUrls.processed_url || imageUrl;
+        thumbnailUrl = existingImageUrls.thumbnail_url;
+        previewUrl = existingImageUrls.preview_url;
       }
 
       // Generate and save panels
       let panelUrls: Array<{ panel_order: number; panel_url: string }> = [];
-      if (croppedAreaPixels && imageRef.current && processedUrl) {
+      // Only regenerate panels if visual changes detected or panel count changed
+      if ((visualChangesDetected || panelCountChanged) && croppedAreaPixels && imageRef.current && processedUrl) {
         // Load the processed image to extract panels from
         const processedImg = new Image();
         processedImg.crossOrigin = 'anonymous';
@@ -636,7 +780,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [metadata, imageUrl, imageId, croppedAreaPixels, filters, panelCount, selectiveColor, onSave, imageRef]);
+  }, [metadata, imageUrl, imageId, croppedAreaPixels, filters, panelCount, selectiveColor, onSave, imageRef, hasVisualChanges, existingImageUrls]);
 
   const handleExportAndDownload = useCallback(async () => {
     if (!imageRef.current || !croppedAreaPixels) return;
