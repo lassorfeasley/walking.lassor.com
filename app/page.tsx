@@ -139,7 +139,7 @@ export default function Home() {
                     return (
                       <div
                         key={image.id}
-                        className="w-full min-w-[400px] inline-flex flex-col justify-start items-start gap-1 cursor-pointer hover:opacity-90 transition-opacity"
+                        className="w-full lg:min-w-[400px] inline-flex flex-col justify-start items-start gap-1 cursor-pointer hover:opacity-90 transition-opacity"
                         onClick={() => router.push(`/panorama/${image.id}`)}
                       >
                         {/* Header with Title and Coordinates */}
