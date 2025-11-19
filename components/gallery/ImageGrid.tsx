@@ -37,13 +37,15 @@ export function ImageGrid({ images }: ImageGridProps) {
             onClick={() => setSelectedImage(image)}
           >
             <CardContent className="p-0">
-              <div className="relative aspect-square w-full overflow-hidden bg-muted">
+              <div className="relative w-full overflow-hidden bg-muted" style={{ aspectRatio: '2/1' }}>
                 <Image
                   src={image.thumbnail_url || image.processed_url || image.original_url}
                   alt={image.title || image.description || 'Panorama image'}
                   fill
-                  className="object-cover transition-transform group-hover:scale-105"
+                  className="object-contain transition-transform group-hover:scale-105"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  quality={90}
+                  unoptimized={false}
                 />
                 <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10" />
               </div>
