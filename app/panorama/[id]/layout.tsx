@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import type { PanoramaImage } from '@/types';
 
@@ -29,7 +31,13 @@ async function getOgFields(id: string): Promise<OgFields | null> {
   }
 }
 
-export default async function Head({ params }: { params: { id: string } }) {
+export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}): Promise<Metadata> {
   const record = await getOgFields(params.id);
 
   const heading = record?.title?.trim() || 'Walking Forward panorama';
@@ -38,19 +46,25 @@ export default async function Head({ params }: { params: { id: string } }) {
   const ogImage =
     record?.thumbnail_url || record?.preview_url || record?.processed_url || '';
 
-  return (
-    <>
-      <title>{`${heading} | Walking Forward`}</title>
-      <meta name="description" content={description} />
-      <meta property="og:type" content="article" />
-      <meta property="og:title" content={heading} />
-      <meta property="og:description" content={description} />
-      {ogImage && <meta property="og:image" content={ogImage} />}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={heading} />
-      <meta name="twitter:description" content={description} />
-      {ogImage && <meta name="twitter:image" content={ogImage} />}
-    </>
-  );
+  return {
+    title: `${heading} | Walking Forward`,
+    description,
+    openGraph: {
+      type: 'article',
+      title: heading,
+      description,
+      images: ogImage ? [{ url: ogImage }] : undefined,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: heading,
+      description,
+      images: ogImage ? [ogImage] : undefined,
+    },
+  };
+}
+
+export default function PanoramaLayout({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }
 
