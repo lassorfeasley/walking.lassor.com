@@ -103,11 +103,11 @@ export default function Home() {
           <div className="w-full max-w-[1960px] border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-0">
             {/* Description Section */}
             <div className="self-stretch px-3 pt-3 pb-14 inline-flex flex-col justify-start items-start gap-8">
-              <div className="w-full lg:w-1/2 xl:w-1/3 lg:min-w-[400px] flex flex-col justify-start items-start gap-1">
+              <div className="w-full lg:w-1/2 xl:w-1/3 lg:min-w-[400px] max-w-[651px] flex flex-col justify-start items-start gap-1">
                 <div className="justify-start text-neutral-600 text-2xl font-light font-[var(--font-be-vietnam-pro)]">
                   walking forward
                 </div>
-                <div className="self-stretch justify-start text-neutral-400 text-xs font-medium font-[var(--font-be-vietnam-pro)] leading-5">
+                <div className="self-stretch max-w-[651px] justify-start text-neutral-400 text-xs font-medium font-[var(--font-be-vietnam-pro)] leading-5">
                   Walking Forward documents Lassor's travels from an unconventional point of view. Each panel is a digital panoramic capture, creating a continuous record of motion. The work contrasts Lassor's fleeting movement through space with the enduring character of each place.
                 </div>
               </div>
@@ -130,7 +130,8 @@ export default function Home() {
               ) : (
                 <div className="self-stretch grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-0 gap-y-10 pb-[60px]">
                   {images.map((image) => {
-                    const imageUrl = image.preview_url || image.thumbnail_url || image.processed_url || image.original_url;
+                    const thumbnailUrl = image.thumbnail_url || image.processed_url || image.original_url;
+                    const previewUrl = image.preview_url || image.processed_url || image.original_url;
                     const latDMS = toDMS(image.latitude, true);
                     const lngDMS = toDMS(image.longitude, false);
                     const dateFormatted = image.date_taken ? formatDateMonthYear(image.date_taken) : '';
@@ -160,7 +161,13 @@ export default function Home() {
                         {/* Image */}
                         <img
                           className="w-full"
-                          src={imageUrl}
+                          src={thumbnailUrl}
+                          srcSet={
+                            previewUrl
+                              ? `${thumbnailUrl} 400w, ${previewUrl} 1920w`
+                              : undefined
+                          }
+                          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 652px"
                           alt={image.title || image.description || 'Panorama image'}
                           style={{ display: 'block', height: 'auto', objectFit: 'contain' }}
                         />

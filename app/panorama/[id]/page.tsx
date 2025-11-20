@@ -65,6 +65,7 @@ export default function PublicPanoramaPage({
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [calculatedWidth, setCalculatedWidth] = useState<number>(0);
   const [calculatedHeight, setCalculatedHeight] = useState<number>(0);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const loadImage = async () => {
@@ -89,9 +90,24 @@ export default function PublicPanoramaPage({
 
   // Load image to get dimensions and calculate responsive sizing
   useEffect(() => {
+    const updateViewportInfo = () => {
+      if (typeof window === 'undefined') return;
+      setIsMobile(window.innerWidth <= 640);
+    };
+
+    updateViewportInfo();
+    window.addEventListener('resize', updateViewportInfo);
+    return () => window.removeEventListener('resize', updateViewportInfo);
+  }, []);
+
+  useEffect(() => {
     if (!image) return;
 
-    const imageUrl = image.processed_url || image.original_url;
+    const imageUrl =
+      (isMobile ? image.thumbnail_url : undefined) ||
+      image.preview_url ||
+      image.processed_url ||
+      image.original_url;
     const img = new Image();
     
     img.onload = () => {
@@ -115,7 +131,7 @@ export default function PublicPanoramaPage({
     };
 
     img.src = imageUrl;
-  }, [image]);
+  }, [image, isMobile]);
 
   // Recalculate on window resize
   useEffect(() => {
@@ -151,15 +167,24 @@ export default function PublicPanoramaPage({
   }
 
   // Use full-sized processed image, fallback to original if processed not available
-  const imageUrl = image.processed_url || image.original_url;
+  const imageUrl =
+    (isMobile ? image.thumbnail_url : undefined) ||
+    image.preview_url ||
+    image.processed_url ||
+    image.original_url;
   const latDMS = toDMS(image.latitude, true);
   const lngDMS = toDMS(image.longitude, false);
   const dateFormatted = image.date_taken ? formatDateMonthYear(image.date_taken) : '';
   const locationFormatted = formatLocationForDisplay(image.location_name);
 
   // Use calculated width or fallback to image width or 1960px
-  const maxWidth = calculatedWidth || imageDimensions?.width || 1960;
-  const imageHeight = calculatedHeight || (imageDimensions ? maxWidth * (imageDimensions.height / imageDimensions.width) : 384);
+  const baseWidth = calculatedWidth || imageDimensions?.width || 1960;
+  const displayWidth = Math.min(baseWidth, 1960);
+  const baseHeight =
+    calculatedHeight || (imageDimensions && baseWidth
+      ? baseWidth * (imageDimensions.height / imageDimensions.width)
+      : 384);
+  const imageHeight = baseWidth ? baseHeight * (displayWidth / baseWidth) : baseHeight;
 
   return (
     <div className="self-stretch inline-flex flex-col justify-start items-center bg-white min-h-screen">
@@ -187,56 +212,99 @@ export default function PublicPanoramaPage({
       </div>
 
       {/* Main Content Container */}
-      <div className="w-full flex flex-col justify-start items-start" style={{ maxWidth: `${maxWidth}px` }}>
-        <div className="self-stretch px-5 flex flex-col justify-start items-start">
-          {/* Content with borders */}
-          <div className="self-stretch py-5 border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-5">
-            {/* Title and Coordinates */}
-            <div className="self-stretch px-3 inline-flex justify-between items-center">
-              <div className="justify-start text-neutral-700 text-xl font-extralight font-[var(--font-inconsolata)]">
-                {image.title}
-              </div>
-              <div className="size- flex justify-start items-center gap-5">
-                <div className="justify-start text-neutral-700 text-xl font-extralight font-[var(--font-inconsolata)]">
-                  {latDMS}
+      <div className="self-stretch flex flex-col justify-start items-center">
+        {isMobile ? (
+          <div className="detail-mobile-wrapper self-stretch w-full max-w-[1960px] px-5 flex flex-col justify-start items-start">
+            <div className="detail-mobile-panel self-stretch pt-5 border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-5">
+              <div className="detail-mobile-pano self-stretch py-1 border-t border-b border-neutral-300 flex flex-col justify-start items-start gap-1">
+                <div className="self-stretch px-2 inline-flex justify-between items-center">
+                  <div className="text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
+                    {image.title || 'Title'}
+                  </div>
+                  <div className="flex justify-start items-center gap-2">
+                    <div className="text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
+                      {latDMS}
+                    </div>
+                    <div className="text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
+                      {lngDMS}
+                    </div>
+                  </div>
                 </div>
-                <div className="justify-start text-neutral-600 text-xl font-extralight font-[var(--font-inconsolata)]">
-                  {lngDMS}
+                <img
+                  className="w-full"
+                  src={imageUrl}
+                  alt={image.title || 'Panorama image'}
+                  style={{ display: 'block', height: 'auto', objectFit: 'contain' }}
+                />
+                <div className="self-stretch px-2 inline-flex justify-between items-center">
+                  <div className="text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
+                    {locationFormatted || image.location_name || 'Location'}
+                  </div>
+                  <div className="text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
+                    {dateFormatted || 'Date'}
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* Main Image */}
-            <img
-              className="w-full"
-              src={imageUrl}
-              alt={image.title || 'Panorama image'}
-              style={{
-                width: '100%',
-                height: `${imageHeight}px`,
-                objectFit: 'contain',
-                display: 'block',
-              }}
-            />
-
-            {/* Location and Date */}
-            <div className="self-stretch px-3 inline-flex justify-between items-center">
-              <div className="justify-start text-neutral-600 text-xl font-extralight font-[var(--font-inconsolata)]">
-                {locationFormatted}
-              </div>
-              <div className="justify-start text-neutral-600 text-xl font-extralight font-[var(--font-inconsolata)]">
-                {dateFormatted}
+              <div className="detail-mobile-description self-stretch min-h-[500px] px-3 pt-3 border-t border-neutral-300 inline-flex justify-start items-start gap-2.5">
+                <div className="w-full lg:w-1/2 xl:w-1/3 lg:min-w-[400px] max-w-[651px] flex flex-col justify-start items-start gap-1 text-neutral-500 text-xs font-medium font-[var(--font-be-vietnam-pro)] leading-5">
+                  {image.description || 'No description available.'}
+                </div>
               </div>
             </div>
           </div>
+        ) : (
+          <div
+            className="detail-desktop-frame w-full max-w-[1960px] flex flex-col justify-start items-start"
+            style={{ maxWidth: `${displayWidth}px` }}
+          >
+            <div className="detail-desktop-inner self-stretch px-5 flex flex-col justify-start items-start">
+              <div className="detail-desktop-panel self-stretch pt-10 border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-10">
+                <div className="detail-pano-section self-stretch border-t border-b border-neutral-300 flex flex-col justify-start items-start">
+                  <div className="self-stretch h-10 px-2 inline-flex justify-between items-center">
+                    <div className="text-neutral-700 text-base font-light font-[var(--font-be-vietnam-pro)]">
+                      {image.title || 'Untitled Panorama'}
+                    </div>
+                    <div className="flex justify-start items-center gap-5">
+                      <div className="text-neutral-700 text-base font-light font-[var(--font-be-vietnam-pro)]">
+                        {latDMS}
+                      </div>
+                      <div className="text-neutral-600 text-base font-light font-[var(--font-be-vietnam-pro)]">
+                        {lngDMS}
+                      </div>
+                    </div>
+                  </div>
 
-          {/* Description Section */}
-          <div className="self-stretch h-[500px] min-h-[500px] px-3 pt-5 border-l border-r border-t border-neutral-300 inline-flex justify-start items-start gap-2.5">
-            <div className="w-96 justify-start text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)] leading-4">
-              {image.description}
+                  <img
+                    className="w-full"
+                    src={imageUrl}
+                    alt={image.title || 'Panorama image'}
+                    style={{
+                      width: '100%',
+                      height: `${imageHeight}px`,
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                  />
+
+                  <div className="self-stretch h-10 px-2 inline-flex justify-between items-center">
+                    <div className="text-neutral-600 text-base font-light font-[var(--font-be-vietnam-pro)]">
+                      {locationFormatted || image.location_name || '—'}
+                    </div>
+                    <div className="text-neutral-600 text-base font-light font-[var(--font-be-vietnam-pro)]">
+                      {dateFormatted || '—'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="detail-description-section self-stretch min-h-[500px] px-3 pt-3 border-t border-neutral-300 inline-flex justify-start items-start gap-2.5">
+                  <div className="w-full lg:w-1/2 xl:w-1/3 lg:min-w-[400px] max-w-[651px] flex flex-col justify-start items-start gap-1 text-neutral-500 text-xs font-medium font-[var(--font-be-vietnam-pro)] leading-5">
+                    {image.description || 'No description available.'}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Footer */}
