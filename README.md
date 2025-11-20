@@ -63,6 +63,9 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 # Optional: Customize bucket names (defaults shown)
 NEXT_PUBLIC_STORAGE_BUCKET_RAW=raw-panoramas
 NEXT_PUBLIC_STORAGE_BUCKET_PROCESSED=processed-images
+
+# Public site URL (used for Open Graph metadata/canonical links)
+NEXT_PUBLIC_SITE_URL=https://walking.lassor.com
 ```
 
 4. **Run the development server:**
@@ -137,6 +140,7 @@ For now, you can export images and post them manually to Instagram.
 
 - Each public panorama/library page now exposes full OG + Twitter metadata. The first generated Instagram panel (1080x1080) is used for cards; if no panels exist, the app falls back to the processed image and finally to `public/og-default.png`.
 - If you update panels or notice the fallback image, open the panorama in `/library/[id]`, regenerate the panels, and publish to ensure a square preview exists.
+- **Set `NEXT_PUBLIC_SITE_URL`:** point it at the domain you expect scrapers to use (e.g., `https://walking.lassor.com`) so canonical URLs and OG tags match production.
 - **Local verification:** run `npm run dev`, open the route in your browser, or inspect the tags via `curl -L http://localhost:3000/panorama/<id> | rg 'og:'`.
 - **Social debugger tests:** Facebook/Twitter/LinkedIn cannot reach `localhost`. Use a Vercel preview/production deploy or tunnel your dev server (e.g., `npx ngrok http 3000` or `cloudflared tunnel --url http://localhost:3000`) before running the sharing debuggers.
 

@@ -179,7 +179,7 @@ export default function PublicPanoramaPage({
 
   // Use calculated width or fallback to image width or 1960px
   const baseWidth = calculatedWidth || imageDimensions?.width || 1960;
-  const displayWidth = Math.min(baseWidth, 1960);
+  const displayWidth = baseWidth;
   const baseHeight =
     calculatedHeight || (imageDimensions && baseWidth
       ? baseWidth * (imageDimensions.height / imageDimensions.width)
@@ -187,7 +187,7 @@ export default function PublicPanoramaPage({
   const imageHeight = baseWidth ? baseHeight * (displayWidth / baseWidth) : baseHeight;
 
   return (
-    <div className="self-stretch inline-flex flex-col justify-start items-center bg-white min-h-screen">
+    <div className="w-full flex flex-col justify-start items-center bg-white min-h-screen">
       {/* Breadcrumb Section */}
       <div className="self-stretch h-10 px-3 py-2 border-b border-neutral-300 inline-flex justify-between items-center">
         <div className="justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
@@ -212,9 +212,9 @@ export default function PublicPanoramaPage({
       </div>
 
       {/* Main Content Container */}
-      <div className="self-stretch flex flex-col justify-start items-center">
+      <div className="w-full flex flex-col justify-start items-center">
         {isMobile ? (
-          <div className="detail-mobile-wrapper self-stretch w-full max-w-[1960px] px-5 flex flex-col justify-start items-start">
+          <div className="detail-mobile-wrapper w-full px-5 flex flex-col justify-start items-center mx-auto">
             <div className="detail-mobile-panel self-stretch pt-5 border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-5">
               <div className="detail-mobile-pano self-stretch py-1 border-t border-b border-neutral-300 flex flex-col justify-start items-start gap-1">
                 <div className="self-stretch px-2 inline-flex justify-between items-center">
@@ -254,8 +254,8 @@ export default function PublicPanoramaPage({
           </div>
         ) : (
           <div
-            className="detail-desktop-frame w-full max-w-[1960px] flex flex-col justify-start items-start"
-            style={{ maxWidth: `${displayWidth}px` }}
+            className="detail-desktop-frame w-full flex flex-col justify-start items-center mx-auto"
+            style={{ width: '100%', maxWidth: `${displayWidth}px` }}
           >
             <div className="detail-desktop-inner self-stretch px-5 flex flex-col justify-start items-start">
               <div className="detail-desktop-panel self-stretch pt-10 border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-10">

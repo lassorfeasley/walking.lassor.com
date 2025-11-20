@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { PanoramaImage } from '@/types';
+import { PanoramaImage, PanoramaPanel } from '@/types';
 
 // GET - Fetch image metadata by ID (public access)
 export async function GET(
@@ -10,6 +10,7 @@ export async function GET(
   try {
     const supabase = await createClient()
     const { id } = await params;
+    const includePanels = request.nextUrl.searchParams.get('includePanels');
     
     // Public read allowed by RLS
     const { data, error } = await supabase
@@ -25,7 +26,25 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(data);
+    let panels: PanoramaPanel[] | undefined;
+
+    if (includePanels) {
+      const { data: panelData, error: panelError } = await supabase
+        .from('panorama_panels')
+        .select('id, panel_order, panel_url, panorama_image_id')
+        .eq('panorama_image_id', id)
+        .order('panel_order', { ascending: true });
+
+      if (panelError) {
+        console.error('Error fetching panels for image metadata:', panelError);
+      } else {
+        panels = panelData || [];
+      }
+    }
+
+    return NextResponse.json(
+      panels ? { ...data, panels } : data
+    );
   } catch (error) {
     console.error('Images API error:', error);
     return NextResponse.json(
