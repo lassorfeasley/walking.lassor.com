@@ -35,6 +35,8 @@ const beVietnamPro = Be_Vietnam_Pro({
 const siteUrl = getSiteUrl();
 const metadataBase = new URL(siteUrl);
 const defaultOgImage = absoluteUrl(DEFAULT_OG_IMAGE_PATH);
+const faviconSvgPath = "/icons/wf-favicon.svg";
+const webclipSvgPath = "/icons/wf-webclip.svg";
 
 export async function generateMetadata(): Promise<Metadata> {
   const payload = await buildHomeMetadataPayload();
@@ -66,6 +68,19 @@ export async function generateMetadata(): Promise<Metadata> {
       title: payload.title,
       description: payload.description,
       images: [payload.imageUrl || defaultOgImage],
+    },
+    icons: {
+      icon: [
+        { url: faviconSvgPath, type: "image/svg+xml" },
+        { url: "/favicon.ico", type: "image/x-icon", sizes: "32x32" },
+      ],
+      shortcut: [{ url: faviconSvgPath, type: "image/svg+xml" }],
+      apple: [{ url: webclipSvgPath, type: "image/svg+xml" }],
+      other: [{ rel: "mask-icon", url: faviconSvgPath, color: "#404040" }],
+    },
+    appleWebApp: {
+      capable: true,
+      title: payload.title || SITE_NAME,
     },
   };
 }
