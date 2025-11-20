@@ -31,7 +31,11 @@ async function resolveRequestBaseUrl() {
   return getSiteUrl();
 }
 
-async function fetchPanoramaFromApi(id: string): Promise<PanoramaApiResponse | null> {
+async function fetchPanoramaFromApi(id?: string): Promise<PanoramaApiResponse | null> {
+  if (!id) {
+    return null;
+  }
+
   try {
     const baseUrl = await resolveRequestBaseUrl();
     const url = new URL(`/api/images/${id}`, baseUrl);
@@ -54,7 +58,11 @@ async function fetchPanoramaFromApi(id: string): Promise<PanoramaApiResponse | n
   }
 }
 
-async function fetchPanoramaViaAdmin(id: string): Promise<PanoramaApiResponse | null> {
+async function fetchPanoramaViaAdmin(id?: string): Promise<PanoramaApiResponse | null> {
+  if (!id) {
+    return null;
+  }
+
   try {
     const admin = createAdminClient();
     if (!admin) {
@@ -99,7 +107,17 @@ export interface PanoramaMetadataPayload {
   imageUrl: string;
 }
 
-export async function buildPanoramaMetadataPayload(id: string): Promise<PanoramaMetadataPayload> {
+export async function buildPanoramaMetadataPayload(id?: string): Promise<PanoramaMetadataPayload> {
+  if (!id) {
+    return {
+      record: null,
+      panels: [],
+      title: DEFAULT_PANORAMA_TITLE,
+      description: DEFAULT_PANORAMA_DESCRIPTION,
+      imageUrl: absoluteUrl(DEFAULT_OG_IMAGE_PATH),
+    };
+  }
+
   let recordWithPanels = await fetchPanoramaFromApi(id);
 
   if (!recordWithPanels) {
