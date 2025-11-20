@@ -102,7 +102,7 @@ export default function Home() {
         <div className="self-stretch px-5 flex flex-col justify-start items-center gap-2.5">
           <div className="w-full max-w-[1960px] border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-0">
             {/* Description Section */}
-            <div className="self-stretch px-3 pt-3 pb-14 border-b border-neutral-300 inline-flex flex-col justify-start items-start gap-8">
+            <div className="self-stretch px-3 pt-3 pb-14 inline-flex flex-col justify-start items-start gap-8">
               <div className="w-full lg:w-1/2 xl:w-1/3 lg:min-w-[400px] flex flex-col justify-start items-start gap-1">
                 <div className="justify-start text-neutral-600 text-2xl font-light font-[var(--font-be-vietnam-pro)]">
                   walking forward
@@ -139,7 +139,7 @@ export default function Home() {
                     return (
                       <div
                         key={image.id}
-                        className="w-full flex-1 max-w-[652px] py-1 outline outline-1 outline-offset-[-1px] outline-neutral-300 inline-flex flex-col justify-start items-start gap-1 cursor-pointer hover:opacity-90 transition-opacity"
+                        className="w-full flex-1 max-w-full lg:max-w-[652px] py-1 border border-neutral-300 border-x-0 inline-flex flex-col justify-start items-start gap-1 cursor-pointer hover:opacity-90 transition-opacity"
                         onClick={() => router.push(`/panorama/${image.id}`)}
                       >
                         {/* Header with Title and Coordinates */}
@@ -159,10 +159,10 @@ export default function Home() {
 
                         {/* Image */}
                         <img
-                          className="self-stretch h-28"
+                          className="w-full"
                           src={imageUrl}
                           alt={image.title || image.description || 'Panorama image'}
-                          style={{ display: 'block', objectFit: 'contain' }}
+                          style={{ display: 'block', height: 'auto', objectFit: 'contain' }}
                         />
 
                         {/* Footer with Location and Date */}
