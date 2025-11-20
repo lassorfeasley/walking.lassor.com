@@ -9,6 +9,7 @@ import {
   getSiteUrl,
   absoluteUrl,
 } from "@/lib/site-config";
+import { buildHomeMetadataPayload } from "@/lib/metadata";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,35 +36,39 @@ const siteUrl = getSiteUrl();
 const metadataBase = new URL(siteUrl);
 const defaultOgImage = absoluteUrl(DEFAULT_OG_IMAGE_PATH);
 
-export const metadata: Metadata = {
-  metadataBase,
-  title: {
-    default: SITE_NAME,
-    template: `%s | ${SITE_NAME}`,
-  },
-  description: SITE_DESCRIPTION,
-  openGraph: {
-    type: "website",
-    url: siteUrl,
-    title: SITE_NAME,
-    siteName: SITE_NAME,
-    description: SITE_DESCRIPTION,
-    images: [
-      {
-        url: defaultOgImage,
-        width: 1200,
-        height: 1200,
-        alt: "Walking Forward default panorama preview",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: SITE_NAME,
-    description: SITE_DESCRIPTION,
-    images: [defaultOgImage],
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const payload = await buildHomeMetadataPayload();
+
+  return {
+    metadataBase,
+    title: {
+      default: payload.title || SITE_NAME,
+      template: `%s | ${SITE_NAME}`,
+    },
+    description: payload.description || SITE_DESCRIPTION,
+    openGraph: {
+      type: "website",
+      url: payload.url || siteUrl,
+      title: payload.title,
+      siteName: SITE_NAME,
+      description: payload.description,
+      images: [
+        {
+          url: payload.imageUrl || defaultOgImage,
+          width: 1080,
+          height: 1080,
+          alt: "Walking Forward latest panorama preview",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: payload.title,
+      description: payload.description,
+      images: [payload.imageUrl || defaultOgImage],
+    },
+  };
+}
 
 export default function RootLayout({
   children,

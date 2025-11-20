@@ -5,6 +5,8 @@ import {
   DEFAULT_OG_IMAGE_PATH,
   DEFAULT_PANORAMA_DESCRIPTION,
   DEFAULT_PANORAMA_TITLE,
+  SITE_DESCRIPTION,
+  SITE_NAME,
   absoluteUrl,
   getSiteUrl,
 } from '@/lib/site-config';
@@ -107,6 +109,44 @@ export interface PanoramaMetadataPayload {
   imageUrl: string;
 }
 
+async function fetchLatestPanorama(): Promise<PanoramaApiResponse | null> {
+  try {
+    const admin = createAdminClient();
+    if (!admin) {
+      return null;
+    }
+
+    const { data: record, error } = await admin
+      .from('panorama_images')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !record) {
+      return null;
+    }
+
+    const { data: panelData, error: panelError } = await admin
+      .from('panorama_panels')
+      .select('id, panel_order, panel_url, panorama_image_id')
+      .eq('panorama_image_id', record.id)
+      .order('panel_order', { ascending: true });
+
+    if (panelError) {
+      console.warn(`Admin metadata fetch: failed to load panels for panorama ${record.id}`, panelError);
+    }
+
+    return {
+      ...(record as PanoramaImage),
+      panels: (panelData || []) as PanoramaPanel[],
+    };
+  } catch (error) {
+    console.error('Failed to fetch latest panorama for home metadata:', error);
+    return null;
+  }
+}
+
 export async function buildPanoramaMetadataPayload(id?: string): Promise<PanoramaMetadataPayload> {
   if (!id) {
     return {
@@ -151,6 +191,39 @@ export async function buildPanoramaMetadataPayload(id?: string): Promise<Panoram
     title,
     description,
     imageUrl,
+  };
+}
+
+export interface HomeMetadataPayload {
+  title: string;
+  description: string;
+  imageUrl: string;
+  url: string;
+}
+
+export async function buildHomeMetadataPayload(): Promise<HomeMetadataPayload> {
+  const latest = await fetchLatestPanorama();
+  const title = 'Walking forward by Lassor Feasley';
+  const description =
+    SITE_DESCRIPTION ||
+    'Walking Forward documents Lassor’s travels from an unconventional point of view.';
+
+  const firstPanelUrl = latest?.panels?.find((panel) => !!panel.panel_url)?.panel_url;
+
+  const fallbackImage =
+    latest?.thumbnail_url ||
+    latest?.preview_url ||
+    latest?.processed_url ||
+    latest?.original_url ||
+    DEFAULT_OG_IMAGE_PATH;
+
+  const imageUrl = absoluteUrl(firstPanelUrl || fallbackImage);
+
+  return {
+    title,
+    description,
+    imageUrl,
+    url: absoluteUrl('/'),
   };
 }
 
