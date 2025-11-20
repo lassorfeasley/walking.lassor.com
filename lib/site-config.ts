@@ -1,5 +1,7 @@
 export const SITE_NAME = "Walking Forward";
 export const SITE_DESCRIPTION = "Panorama image processing and Instagram automation";
+export const SITE_HOME_DESCRIPTION =
+  "Walking Forward documents Lassor's travels from an unconventional point of view.";
 export const DEFAULT_PANORAMA_TITLE = "Walking Forward panorama";
 export const DEFAULT_PANORAMA_DESCRIPTION = "Walking Forward panorama detail view.";
 export const DEFAULT_OG_IMAGE_PATH = "/og-default.png";

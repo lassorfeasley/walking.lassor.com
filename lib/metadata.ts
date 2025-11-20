@@ -6,6 +6,7 @@ import {
   DEFAULT_PANORAMA_DESCRIPTION,
   DEFAULT_PANORAMA_TITLE,
   SITE_DESCRIPTION,
+  SITE_HOME_DESCRIPTION,
   SITE_NAME,
   absoluteUrl,
   getSiteUrl,
@@ -109,7 +110,29 @@ export interface PanoramaMetadataPayload {
   imageUrl: string;
 }
 
-async function fetchLatestPanorama(): Promise<PanoramaApiResponse | null> {
+async function fetchLatestPanoramaFromApi(): Promise<PanoramaApiResponse | null> {
+  try {
+    const baseUrl = await resolveRequestBaseUrl();
+    const url = new URL('/api/images/latest', baseUrl);
+    url.searchParams.set('includePanels', '1');
+
+    const response = await fetch(url.toString(), {
+      cache: 'no-store',
+      next: { revalidate: 0 },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as PanoramaApiResponse;
+  } catch (error) {
+    console.error('Failed to fetch latest panorama via API:', error);
+    return null;
+  }
+}
+
+async function fetchLatestPanoramaViaAdmin(): Promise<PanoramaApiResponse | null> {
   try {
     const admin = createAdminClient();
     if (!admin) {
@@ -142,9 +165,17 @@ async function fetchLatestPanorama(): Promise<PanoramaApiResponse | null> {
       panels: (panelData || []) as PanoramaPanel[],
     };
   } catch (error) {
-    console.error('Failed to fetch latest panorama for home metadata:', error);
+    console.error('Failed to fetch latest panorama for home metadata via admin:', error);
     return null;
   }
+}
+
+async function fetchLatestPanorama(): Promise<PanoramaApiResponse | null> {
+  const viaApi = await fetchLatestPanoramaFromApi();
+  if (viaApi) {
+    return viaApi;
+  }
+  return fetchLatestPanoramaViaAdmin();
 }
 
 export async function buildPanoramaMetadataPayload(id?: string): Promise<PanoramaMetadataPayload> {
@@ -205,6 +236,7 @@ export async function buildHomeMetadataPayload(): Promise<HomeMetadataPayload> {
   const latest = await fetchLatestPanorama();
   const title = 'Walking forward by Lassor Feasley';
   const description =
+    SITE_HOME_DESCRIPTION ||
     SITE_DESCRIPTION ||
     'Walking Forward documents Lassor’s travels from an unconventional point of view.';
 
