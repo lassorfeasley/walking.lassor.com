@@ -108,7 +108,7 @@ export default function Home() {
                   walking forward
                 </div>
                 <div className="self-stretch max-w-[651px] justify-start text-neutral-400 text-xs font-medium font-[var(--font-be-vietnam-pro)] leading-5">
-                  Walking Forward documents Lassor's travels from an unconventional point of view. Each panel is a digital panoramic capture, creating a continuous record of motion. The work contrasts Lassor's fleeting movement through space with the enduring character of each place.
+                  Walking Forward documents Lassor&rsquo;s travels from an unconventional point of view. Each panel is a digital panoramic capture, creating a continuous record of motion. The work contrasts Lassor&rsquo;s fleeting movement through space with the enduring character of each place.
                 </div>
               </div>
             </div>
