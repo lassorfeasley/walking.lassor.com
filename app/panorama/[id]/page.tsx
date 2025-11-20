@@ -309,15 +309,15 @@ export default function PublicPanoramaPage({
 
       {/* Footer */}
       <div className="self-stretch flex flex-col justify-start items-center">
-        <div className="self-stretch h-36 px-3 pt-3 pb-24 border-t border-neutral-300 flex flex-col justify-start items-start gap-3">
-          <div className="self-stretch min-w-36 justify-start text-neutral-500 text-xs font-bold leading-4 font-[var(--font-inconsolata)]">
+        <div className="self-stretch h-36 px-3 pt-3 pb-24 border-t border-neutral-300 inline-flex flex-col justify-start items-start gap-2">
+          <div className="self-stretch min-w-36 justify-start text-neutral-500 text-[10px] font-bold font-[var(--font-be-vietnam-pro)]">
             Developed by Lassor
           </div>
           <div className="self-stretch flex flex-col justify-start items-start gap-1">
-            <div className="self-stretch justify-start text-neutral-500 text-xs font-medium leading-4 font-[var(--font-inconsolata)]">
+            <div className="self-stretch justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
               www.Lassor.com
             </div>
-            <div className="w-56 justify-start text-neutral-500 text-xs font-medium leading-4 font-[var(--font-inconsolata)]">
+            <div className="w-56 justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
               Feasley@Lassor.com
             </div>
           </div>

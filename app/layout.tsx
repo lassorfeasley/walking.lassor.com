@@ -2,6 +2,13 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inconsolata, Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { AdminNav } from "@/components/auth/AdminNav";
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  DEFAULT_OG_IMAGE_PATH,
+  getSiteUrl,
+  absoluteUrl,
+} from "@/lib/site-config";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,9 +31,38 @@ const beVietnamPro = Be_Vietnam_Pro({
   subsets: ["latin"],
 });
 
+const siteUrl = getSiteUrl();
+const metadataBase = new URL(siteUrl);
+const defaultOgImage = absoluteUrl(DEFAULT_OG_IMAGE_PATH);
+
 export const metadata: Metadata = {
-  title: "Walking Forward",
-  description: "Panorama image processing and Instagram automation",
+  metadataBase,
+  title: {
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    url: siteUrl,
+    title: SITE_NAME,
+    siteName: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: [
+      {
+        url: defaultOgImage,
+        width: 1200,
+        height: 1200,
+        alt: "Walking Forward default panorama preview",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: [defaultOgImage],
+  },
 };
 
 export default function RootLayout({
