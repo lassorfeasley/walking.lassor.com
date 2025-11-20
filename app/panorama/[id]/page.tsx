@@ -164,8 +164,8 @@ export default function PublicPanoramaPage({
   return (
     <div className="self-stretch inline-flex flex-col justify-start items-center bg-white min-h-screen">
       {/* Breadcrumb Section */}
-      <div className="self-stretch h-20 px-5 py-3 border-b border-neutral-300 flex flex-col justify-center items-start gap-5">
-        <div className="justify-start text-neutral-500 text-base font-normal font-[var(--font-inconsolata)]">
+      <div className="self-stretch h-10 px-3 py-2 border-b border-neutral-300 inline-flex justify-between items-center">
+        <div className="justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
           <Link href="https://lassor.com" className="hover:text-neutral-700 transition-colors">
             lassor.com
           </Link>
@@ -175,6 +175,14 @@ export default function PublicPanoramaPage({
           </Link>
           {' → '}
           {image.title}
+        </div>
+        <div className="flex justify-start items-end gap-2">
+          <Link href="/signin" className="justify-start text-neutral-400 text-base font-black cursor-pointer hover:text-neutral-600 transition-colors">
+            <i className="fas fa-arrow-up"></i>
+          </Link>
+          <div className="justify-start text-neutral-400 text-base font-black">
+            <i className="fas fa-globe"></i>
+          </div>
         </div>
       </div>
 
@@ -233,15 +241,15 @@ export default function PublicPanoramaPage({
 
       {/* Footer */}
       <div className="self-stretch flex flex-col justify-start items-center">
-        <div className="self-stretch h-36 px-5 pt-5 pb-24 border-t border-neutral-300 flex flex-col justify-start items-start gap-3">
-          <div className="self-stretch min-w-36 justify-start text-neutral-500 text-base font-extrabold font-[var(--font-inconsolata)]">
+        <div className="self-stretch h-36 px-3 pt-3 pb-24 border-t border-neutral-300 flex flex-col justify-start items-start gap-3">
+          <div className="self-stretch min-w-36 justify-start text-neutral-500 text-xs font-bold leading-4 font-[var(--font-inconsolata)]">
             Developed by Lassor
           </div>
           <div className="self-stretch flex flex-col justify-start items-start gap-1">
-            <div className="self-stretch justify-start text-neutral-500 text-base font-normal font-[var(--font-inconsolata)]">
+            <div className="self-stretch justify-start text-neutral-500 text-xs font-medium leading-4 font-[var(--font-inconsolata)]">
               www.Lassor.com
             </div>
-            <div className="w-56 justify-start text-neutral-500 text-base font-normal font-[var(--font-inconsolata)]">
+            <div className="w-56 justify-start text-neutral-500 text-xs font-medium leading-4 font-[var(--font-inconsolata)]">
               Feasley@Lassor.com
             </div>
           </div>

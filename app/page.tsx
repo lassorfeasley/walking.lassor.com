@@ -79,19 +79,19 @@ export default function Home() {
   return (
     <div className="w-full bg-white inline-flex flex-col justify-start items-start overflow-hidden min-h-screen">
       {/* Header */}
-      <div className="self-stretch h-20 px-5 py-3 border-b border-neutral-300 inline-flex justify-between items-center">
-        <div className="justify-start text-neutral-500 text-xs font-normal font-[var(--font-inconsolata)]">
+      <div className="self-stretch h-10 px-3 py-2 border-b border-neutral-300 inline-flex justify-between items-center">
+        <div className="justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
           <Link href="https://lassor.com" className="hover:text-neutral-700 transition-colors">
             lassor.com
           </Link>
           {' → '}
           Walking forward
         </div>
-        <div className="flex justify-start items-end gap-4">
-          <Link href="/signin" className="justify-start text-neutral-400 text-3xl font-black cursor-pointer hover:text-neutral-600 transition-colors">
+        <div className="flex justify-start items-end gap-2">
+          <Link href="/signin" className="justify-start text-neutral-400 text-base font-black cursor-pointer hover:text-neutral-600 transition-colors">
             <i className="fas fa-arrow-up"></i>
           </Link>
-          <div className="justify-start text-neutral-400 text-3xl font-black">
+          <div className="justify-start text-neutral-400 text-base font-black">
             <i className="fas fa-globe"></i>
           </div>
         </div>
@@ -100,10 +100,10 @@ export default function Home() {
       {/* Main Content */}
       <div className="self-stretch flex flex-col justify-start items-center">
         <div className="self-stretch px-5 flex flex-col justify-start items-center gap-2.5">
-          <div className="w-full max-w-[1960px] pb-10 border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-5">
+          <div className="w-full max-w-[1960px] border-l border-r border-neutral-300 flex flex-col justify-start items-start gap-0">
             {/* Description Section */}
-            <div className="self-stretch px-3 pt-3 pb-5 border-b border-neutral-300 flex flex-col justify-start items-start gap-8">
-              <div className="w-full max-w-[652px] flex flex-col justify-start items-start gap-2">
+            <div className="self-stretch px-3 pt-3 pb-14 border-b border-neutral-300 inline-flex flex-col justify-start items-start gap-8">
+              <div className="w-full lg:w-1/2 xl:w-1/3 lg:min-w-[400px] flex flex-col justify-start items-start gap-1">
                 <div className="justify-start text-neutral-600 text-2xl font-light font-[var(--font-be-vietnam-pro)]">
                   walking forward
                 </div>
@@ -128,7 +128,7 @@ export default function Home() {
                   <p className="text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)]">No panoramas yet.</p>
                 </div>
               ) : (
-                <div className="self-stretch grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-y-[60px]">
+                <div className="self-stretch grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-0 gap-y-10 pb-[60px]">
                   {images.map((image) => {
                     const imageUrl = image.preview_url || image.thumbnail_url || image.processed_url || image.original_url;
                     const latDMS = toDMS(image.latitude, true);
@@ -139,19 +139,19 @@ export default function Home() {
                     return (
                       <div
                         key={image.id}
-                        className="w-full lg:min-w-[400px] inline-flex flex-col justify-start items-start gap-1 cursor-pointer hover:opacity-90 transition-opacity"
+                        className="w-full flex-1 max-w-[652px] py-1 outline outline-1 outline-offset-[-1px] outline-neutral-300 inline-flex flex-col justify-start items-start gap-1 cursor-pointer hover:opacity-90 transition-opacity"
                         onClick={() => router.push(`/panorama/${image.id}`)}
                       >
                         {/* Header with Title and Coordinates */}
-                        <div className="self-stretch px-3 inline-flex justify-between items-center">
-                          <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                        <div className="self-stretch px-2 inline-flex justify-between items-center">
+                          <div className="justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
                             {image.title || 'Title'}
                           </div>
                           <div className="flex justify-start items-center gap-2">
-                            <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                            <div className="justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
                               {latDMS}
                             </div>
-                            <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                            <div className="justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
                               {lngDMS}
                             </div>
                           </div>
@@ -159,18 +159,18 @@ export default function Home() {
 
                         {/* Image */}
                         <img
-                          className="w-full"
+                          className="self-stretch h-28"
                           src={imageUrl}
                           alt={image.title || image.description || 'Panorama image'}
-                          style={{ display: 'block', height: 'auto', objectFit: 'contain' }}
+                          style={{ display: 'block', objectFit: 'contain' }}
                         />
 
                         {/* Footer with Location and Date */}
-                        <div className="self-stretch px-3 inline-flex justify-between items-center">
-                          <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                        <div className="self-stretch px-2 inline-flex justify-between items-center">
+                          <div className="justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
                             {locationFormatted || 'Location'}
                           </div>
-                          <div className="justify-start text-neutral-500 text-[10px] font-medium font-[var(--font-be-vietnam-pro)] whitespace-nowrap">
+                          <div className="justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
                             {dateFormatted || 'Date'}
                           </div>
                         </div>
