@@ -15,9 +15,9 @@ interface PanoramaApiResponse extends PanoramaImage {
   panels?: PanoramaPanel[];
 }
 
-function resolveRequestBaseUrl() {
+async function resolveRequestBaseUrl() {
   try {
-    const hdrs = headers();
+    const hdrs = await headers();
     const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host');
     if (host) {
       const protocol =
@@ -33,7 +33,7 @@ function resolveRequestBaseUrl() {
 
 async function fetchPanoramaFromApi(id: string): Promise<PanoramaApiResponse | null> {
   try {
-    const baseUrl = resolveRequestBaseUrl();
+    const baseUrl = await resolveRequestBaseUrl();
     const url = new URL(`/api/images/${id}`, baseUrl);
     url.searchParams.set('includePanels', '1');
 
