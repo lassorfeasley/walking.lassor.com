@@ -95,9 +95,9 @@ export default function PanoramaDetailPage({
 
       const nextImage = {
         ...image,
-        status: 'posted',
+        status: 'posted' as const,
         posted_at: new Date().toISOString(),
-        instagram_post_id: payload.postId,
+        instagram_post_id: payload.postId ?? image.instagram_post_id,
       };
       setImage(nextImage);
       alert(

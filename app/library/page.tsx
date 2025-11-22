@@ -85,14 +85,15 @@ export default function LibraryPage() {
         throw new Error(payload.error || 'Failed to post')
       }
 
+      const postedAt = new Date().toISOString()
       setImages((prev) =>
         prev.map((img) =>
           img.id === image.id
             ? {
                 ...img,
-                status: 'posted',
-                posted_at: new Date().toISOString(),
-                instagram_post_id: payload.postId,
+                status: 'posted' as const,
+                posted_at: postedAt,
+                instagram_post_id: payload.postId ?? img.instagram_post_id,
               }
             : img
         )
