@@ -310,18 +310,15 @@ async function createCarouselContainer({
     throw new Error('Carousel requires at least two child media IDs')
   }
 
-  const params = new URLSearchParams({
-    media_type: 'CAROUSEL',
-    caption,
-    access_token: accessToken,
-  })
-
-  childIds.forEach((id) => params.append('children', id))
-
   const response = await fetch(`${GRAPH_BASE_URL}/${igUserId}/media`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      media_type: 'CAROUSEL',
+      caption,
+      children: childIds,
+      access_token: accessToken,
+    }),
   })
 
   const data = await response.json()
