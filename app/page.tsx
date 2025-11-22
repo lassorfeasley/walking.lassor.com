@@ -1,11 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getAllImages } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 import { format } from 'date-fns';
+
+const PANEL_HEIGHT = 1080;
+const PANEL_BLOCK_RATIO = 0.1685;
+const BLOCK_HEIGHT = PANEL_HEIGHT * PANEL_BLOCK_RATIO;
+const IMAGE_STRIP_HEIGHT = PANEL_HEIGHT - BLOCK_HEIGHT * 2;
+const THREE_PANEL_ASPECT_RATIO = (3 * PANEL_HEIGHT) / IMAGE_STRIP_HEIGHT; // Actual processed pano ratio
+const THREE_PANEL_PADDING_PERCENT = `${(100 / THREE_PANEL_ASPECT_RATIO).toFixed(6)}%`;
+const THREE_PANEL_TOLERANCE = 0.05; // Allow small variances when inferring panel count from aspect ratio
 
 // Utility function to convert decimal degrees to DMS format
 function toDMS(decimal: number, isLatitude: boolean): string {
@@ -58,6 +66,8 @@ export default function Home() {
   const [images, setImages] = useState<PanoramaImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clipMaskOverrides, setClipMaskOverrides] = useState<Record<string, boolean>>({});
+  const measuredImagesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const loadImages = async () => {
@@ -75,6 +85,72 @@ export default function Home() {
 
     loadImages();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const pendingImages: HTMLImageElement[] = [];
+
+    images.forEach((image) => {
+      if (typeof image.panel_count === 'number') {
+        // Clean up any stale override data for images that now have metadata
+        measuredImagesRef.current.delete(image.id);
+        setClipMaskOverrides((prev) => {
+          if (!Object.prototype.hasOwnProperty.call(prev, image.id)) return prev;
+          const next = { ...prev };
+          delete next[image.id];
+          return next;
+        });
+        return;
+      }
+
+      if (measuredImagesRef.current.has(image.id)) {
+        return;
+      }
+
+      const src = image.thumbnail_url || image.processed_url || image.original_url;
+      if (!src) return;
+
+      const probe = new window.Image();
+      probe.decoding = 'async';
+      probe.loading = 'eager';
+
+      const finalizeMeasurement = (shouldClip: boolean | null) => {
+        measuredImagesRef.current.add(image.id);
+        if (shouldClip === null) return;
+        setClipMaskOverrides((prev) => {
+          if (prev[image.id] === shouldClip) return prev;
+          return {
+            ...prev,
+            [image.id]: shouldClip,
+          };
+        });
+      };
+
+      probe.onload = () => {
+        const { naturalWidth, naturalHeight } = probe;
+        if (!naturalWidth || !naturalHeight) {
+          finalizeMeasurement(null);
+          return;
+        }
+        const aspectRatio = naturalWidth / naturalHeight;
+        const shouldClip =
+          Math.abs(aspectRatio - THREE_PANEL_ASPECT_RATIO) > THREE_PANEL_TOLERANCE;
+        finalizeMeasurement(shouldClip);
+      };
+
+      probe.onerror = () => finalizeMeasurement(null);
+      probe.src = src;
+      pendingImages.push(probe);
+    });
+
+    return () => {
+      pendingImages.forEach((img) => {
+        img.onload = null;
+        img.onerror = null;
+      });
+    };
+  }, [images]);
 
   return (
     <div className="w-full bg-white inline-flex flex-col justify-start items-start overflow-hidden min-h-screen">
@@ -136,6 +212,12 @@ export default function Home() {
                     const lngDMS = toDMS(image.longitude, false);
                     const dateFormatted = image.date_taken ? formatDateMonthYear(image.date_taken) : '';
                     const locationFormatted = formatLocationForDisplay(image.location_name);
+                  const hasOverride = Object.prototype.hasOwnProperty.call(clipMaskOverrides, image.id);
+                  const measuredClipPreference = hasOverride ? clipMaskOverrides[image.id] : null;
+                  const shouldClipToThreePanelMask =
+                    typeof image.panel_count === 'number'
+                      ? image.panel_count !== 3
+                      : measuredClipPreference ?? true;
 
                     return (
                       <div
@@ -159,18 +241,38 @@ export default function Home() {
                         </div>
 
                         {/* Image */}
-                        <img
-                          className="w-full"
-                          src={thumbnailUrl}
-                          srcSet={
-                            previewUrl
-                              ? `${thumbnailUrl} 400w, ${previewUrl} 1920w`
-                              : undefined
-                          }
-                          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 652px"
-                          alt={image.title || image.description || 'Panorama image'}
-                          style={{ display: 'block', height: 'auto', objectFit: 'contain' }}
-                        />
+                        {shouldClipToThreePanelMask ? (
+                          <div
+                            className="relative w-full overflow-hidden"
+                            style={{ paddingBottom: THREE_PANEL_PADDING_PERCENT }}
+                          >
+                            <img
+                              className="absolute inset-0 w-full h-full"
+                              src={thumbnailUrl}
+                              srcSet={
+                                previewUrl
+                                  ? `${thumbnailUrl} 400w, ${previewUrl} 1920w`
+                                  : undefined
+                              }
+                              sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 652px"
+                              alt={image.title || image.description || 'Panorama image'}
+                              style={{ objectFit: 'cover' }}
+                            />
+                          </div>
+                        ) : (
+                          <img
+                            className="w-full"
+                            src={thumbnailUrl}
+                            srcSet={
+                              previewUrl
+                                ? `${thumbnailUrl} 400w, ${previewUrl} 1920w`
+                                : undefined
+                            }
+                            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 652px"
+                            alt={image.title || image.description || 'Panorama image'}
+                            style={{ display: 'block', height: 'auto', objectFit: 'contain' }}
+                          />
+                        )}
 
                         {/* Footer with Location and Date */}
                         <div className="self-stretch px-2 inline-flex justify-between items-center">

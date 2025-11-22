@@ -11,6 +11,13 @@ import { getAllImages, deleteImage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 import { useRequireAuth } from '@/lib/auth-client';
 
+const PANEL_HEIGHT = 1080;
+const PANEL_BLOCK_RATIO = 0.1685;
+const BLOCK_HEIGHT = PANEL_HEIGHT * PANEL_BLOCK_RATIO;
+const IMAGE_STRIP_HEIGHT = PANEL_HEIGHT - BLOCK_HEIGHT * 2;
+const THREE_PANEL_ASPECT_RATIO = (3 * PANEL_HEIGHT) / IMAGE_STRIP_HEIGHT; // Matches processed preview exports
+const THREE_PANEL_PADDING_PERCENT = `${(100 / THREE_PANEL_ASPECT_RATIO).toFixed(6)}%`;
+
 /**
  * Format location for display:
  * - USA: "City, State"
@@ -163,12 +170,15 @@ export default function LibraryPage() {
               onClick={() => router.push(`/library/${image.id}`)}
             >
               <CardContent className="p-0">
-                <div className="relative w-full overflow-hidden bg-muted" style={{ aspectRatio: '2/1' }}>
+                <div
+                  className="relative w-full overflow-hidden bg-muted"
+                  style={{ paddingBottom: THREE_PANEL_PADDING_PERCENT }}
+                >
                   <Image
                     src={image.thumbnail_url || image.processed_url || image.original_url}
                     alt={image.title || image.description || 'Panorama image'}
                     fill
-                    className="object-contain transition-transform group-hover:scale-105"
+                    className="object-cover transition-transform group-hover:scale-105"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     quality={90}
                     unoptimized={false}
