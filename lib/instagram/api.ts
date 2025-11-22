@@ -13,9 +13,17 @@ const GRAPH_VERSION = process.env.INSTAGRAM_GRAPH_VERSION || 'v21.0'
 const GRAPH_BASE_URL = `https://graph.facebook.com/${GRAPH_VERSION}`
 const POLL_INTERVAL_MS = 1500
 const MAX_POLLS = 10
+const MAX_CAROUSEL_ITEMS = 10
 
 export interface InstagramPostOptions {
-  imageUrl: string
+  /**
+   * Single image fallback (processed panorama, preview, etc.)
+   */
+  imageUrl?: string
+  /**
+   * Ordered list of panel images to post as a carousel (square crops)
+   */
+  panelImageUrls?: string[]
   caption: string
   accessToken: string
   instagramBusinessAccountId?: string
@@ -39,10 +47,36 @@ export async function postToInstagram(
     }
   }
 
+  const panelUrls = (options.panelImageUrls ?? [])
+    .filter(Boolean)
+    .slice(0, MAX_CAROUSEL_ITEMS)
+
+  const shouldPostCarousel = panelUrls.length >= 2
+  const singleImageUrl = options.imageUrl || panelUrls[0]
+
+  if (!shouldPostCarousel && !singleImageUrl) {
+    return {
+      success: false,
+      error:
+        'No image available for Instagram. Provide a fallback pano or at least one panel URL.',
+    }
+  }
+
   try {
+    if (shouldPostCarousel) {
+      const postId = await publishCarousel({
+        igUserId,
+        caption: options.caption,
+        panelUrls,
+        accessToken: options.accessToken,
+      })
+
+      return { success: true, postId }
+    }
+
     const creationId = await createMediaContainer({
       igUserId,
-      imageUrl: options.imageUrl,
+      imageUrl: singleImageUrl!,
       caption: options.caption,
       accessToken: options.accessToken,
     })
@@ -102,17 +136,23 @@ async function createMediaContainer({
   imageUrl,
   caption,
   accessToken,
+  isCarouselItem = false,
 }: {
   igUserId: string
   imageUrl: string
   caption: string
   accessToken: string
+  isCarouselItem?: boolean
 }) {
   const params = new URLSearchParams({
     image_url: imageUrl,
-    caption,
+    caption: isCarouselItem ? '' : caption,
     access_token: accessToken,
   })
+
+  if (isCarouselItem) {
+    params.set('is_carousel_item', 'true')
+  }
 
   const response = await fetch(`${GRAPH_BASE_URL}/${igUserId}/media`, {
     method: 'POST',
@@ -200,6 +240,100 @@ async function publishMedia({
 
   if (!data?.id) {
     throw new Error('Instagram response missing published media ID')
+  }
+
+  return data.id as string
+}
+
+async function publishCarousel({
+  igUserId,
+  caption,
+  panelUrls,
+  accessToken,
+}: {
+  igUserId: string
+  caption: string
+  panelUrls: string[]
+  accessToken: string
+}) {
+  const childCreationIds: string[] = []
+  for (const url of panelUrls) {
+    const childId = await createMediaContainer({
+      igUserId,
+      imageUrl: url,
+      caption,
+      accessToken,
+      isCarouselItem: true,
+    })
+
+    await waitForContainerReady({
+      creationId: childId,
+      accessToken,
+    })
+
+    childCreationIds.push(childId)
+  }
+
+  const carouselCreationId = await createCarouselContainer({
+    igUserId,
+    caption,
+    accessToken,
+    childIds: childCreationIds,
+  })
+
+  await waitForContainerReady({
+    creationId: carouselCreationId,
+    accessToken,
+  })
+
+  const postId = await publishMedia({
+    igUserId,
+    creationId: carouselCreationId,
+    accessToken,
+  })
+
+  return postId
+}
+
+async function createCarouselContainer({
+  igUserId,
+  caption,
+  accessToken,
+  childIds,
+}: {
+  igUserId: string
+  caption: string
+  accessToken: string
+  childIds: string[]
+}) {
+  if (childIds.length < 2) {
+    throw new Error('Carousel requires at least two child media IDs')
+  }
+
+  const params = new URLSearchParams({
+    media_type: 'CAROUSEL',
+    caption,
+    access_token: accessToken,
+  })
+
+  childIds.forEach((id) => params.append('children', id))
+
+  const response = await fetch(`${GRAPH_BASE_URL}/${igUserId}/media`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  })
+
+  const data = await response.json()
+
+  if (!response.ok || data?.error) {
+    throw new Error(
+      data?.error?.message || 'Failed to create Instagram carousel container'
+    )
+  }
+
+  if (!data?.id) {
+    throw new Error('Instagram response missing carousel creation ID')
   }
 
   return data.id as string

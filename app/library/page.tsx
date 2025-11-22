@@ -100,7 +100,9 @@ export default function LibraryPage() {
       )
 
       alert(
-        `Queued for Instagram (stub). Reference: ${payload.postId ?? 'n/a'}`
+        `Queued Instagram carousel (square panels). Reference: ${
+          payload.postId ?? 'n/a'
+        }`
       )
     } catch (err) {
       console.error('Instagram post error', err)
@@ -270,6 +272,7 @@ export default function LibraryPage() {
                     className="mt-3 w-full"
                     onClick={(event) => handlePostToInstagram(image, event)}
                     disabled={postingId === image.id}
+                    title="Posts the square panel carousel to Instagram"
                   >
                     <Instagram className="mr-2 h-4 w-4" />
                     {postingId === image.id

@@ -101,7 +101,9 @@ export default function PanoramaDetailPage({
       };
       setImage(nextImage);
       alert(
-        `Queued for Instagram (stub). Reference: ${payload.postId ?? 'n/a'}`
+        `Queued Instagram carousel (square panels). Reference: ${
+          payload.postId ?? 'n/a'
+        }`
       );
     } catch (error) {
       console.error('Instagram post error', error);
@@ -548,6 +550,7 @@ export default function PanoramaDetailPage({
                   className="w-full"
                   onClick={handlePostToInstagram}
                   disabled={isPosting}
+                  title="Posts the square panel carousel to Instagram"
                 >
                   <Instagram className="mr-2 h-4 w-4" />
                   {isPosting ? 'Posting...' : 'Post to Instagram'}

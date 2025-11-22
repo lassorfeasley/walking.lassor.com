@@ -47,6 +47,16 @@ export async function POST(request: NextRequest) {
     }
 
     const panorama = image as PanoramaImage
+
+    const { data: panelRows } = await supabase
+      .from('panorama_panels')
+      .select('panel_url, panel_order')
+      .eq('panorama_image_id', panorama.id)
+      .order('panel_order', { ascending: true })
+
+    const panelImageUrls = (panelRows || [])
+      .map((panel) => panel.panel_url)
+      .filter((url): url is string => Boolean(url))
     const captionText =
       caption ||
       panorama.description ||
@@ -58,9 +68,9 @@ export async function POST(request: NextRequest) {
       panorama.thumbnail_url ||
       panorama.original_url
 
-    if (!imageUrl) {
+    if (!imageUrl && panelImageUrls.length === 0) {
       return NextResponse.json(
-        { error: 'No usable image URL available for Instagram' },
+        { error: 'No usable image or panel URLs available for Instagram' },
         { status: 400 }
       )
     }
@@ -81,6 +91,7 @@ export async function POST(request: NextRequest) {
 
     const result = await postToInstagram({
       imageUrl,
+      panelImageUrls,
       caption: captionText,
       accessToken,
       instagramBusinessAccountId,
