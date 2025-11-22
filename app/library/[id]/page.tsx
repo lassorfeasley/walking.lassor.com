@@ -72,6 +72,7 @@ export default function PanoramaDetailPage({
   const [isGeneratingOptimized, setIsGeneratingOptimized] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [tokenWarning, setTokenWarning] = useState<string | null>(null)
+  useEffect(() => {
     const loadTokenStatus = async () => {
       try {
         const response = await fetch("/api/admin/instagram-token/status")
