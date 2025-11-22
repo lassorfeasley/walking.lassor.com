@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Trash2, Instagram } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Instagram, Info } from 'lucide-react';
 import Link from 'next/link';
 import { getAllImages, deleteImage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
@@ -51,6 +51,12 @@ function formatLocationForDisplay(locationName: string): string {
   return locationName;
 }
 
+interface TokenStatus {
+  token_hint: string
+  expires_at: string
+  instagram_business_account_id?: string
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const { isLoading: isAuthLoading } = useRequireAuth();
@@ -59,6 +65,8 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [postingId, setPostingId] = useState<string | null>(null);
+  const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null)
+  const [tokenWarning, setTokenWarning] = useState<string | null>(null)
   const handlePostToInstagram = async (
     image: PanoramaImage,
     event?: React.MouseEvent
@@ -116,6 +124,36 @@ export default function LibraryPage() {
     }
   }
 
+
+  useEffect(() => {
+    const loadTokenStatus = async () => {
+      try {
+        const response = await fetch("/api/admin/instagram-token/status")
+        if (!response.ok) return
+        const payload = await response.json()
+        if (payload?.credential) {
+          setTokenStatus(payload.credential)
+          const expires = new Date(payload.credential.expires_at)
+          const today = new Date()
+          const diff =
+            (expires.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          if (diff <= 10) {
+            setTokenWarning(
+              diff <= 0
+                ? "Instagram token expired. Update immediately to keep posting."
+                : `Instagram token expires in ${Math.ceil(
+                    diff
+                  )} days. Update soon.`
+            )
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch token status", error)
+      }
+    }
+
+    loadTokenStatus()
+  }, [])
 
   // All hooks must be called before any conditional returns
   useEffect(() => {
@@ -200,6 +238,22 @@ export default function LibraryPage() {
           </Button>
         </Link>
       </div>
+
+      {tokenWarning ? (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="flex items-center gap-2 font-medium">
+            <Info className="h-4 w-4" />
+            {tokenWarning}
+          </div>
+          <p className="mt-1 text-xs text-amber-900/80">
+            Update the long-lived token via the admin panel.{" "}
+            <Link href="/admin/instagram-token" className="underline">
+              Open token settings
+            </Link>
+            .
+          </p>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className="text-center py-12">

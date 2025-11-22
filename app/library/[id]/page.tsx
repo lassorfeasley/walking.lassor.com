@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText, Download, Trash2, Instagram } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText, Download, Trash2, Instagram, Info } from 'lucide-react';
 import Link from 'next/link';
 import { getImageMetadata, getPanelsByImageId, deleteImage, saveImageMetadata } from '@/lib/supabase/database';
 import { useEffect, useState } from 'react';
@@ -71,6 +71,34 @@ export default function PanoramaDetailPage({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isGeneratingOptimized, setIsGeneratingOptimized] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [tokenWarning, setTokenWarning] = useState<string | null>(null)
+    const loadTokenStatus = async () => {
+      try {
+        const response = await fetch("/api/admin/instagram-token/status")
+        if (!response.ok) return
+        const payload = await response.json()
+        if (payload?.credential) {
+          const expires = new Date(payload.credential.expires_at)
+          const today = new Date()
+          const diff =
+            (expires.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          if (diff <= 10) {
+            setTokenWarning(
+              diff <= 0
+                ? "Instagram token expired. Update immediately to keep posting."
+                : `Instagram token expires in ${Math.ceil(
+                    diff
+                  )} days. Update soon.`
+            )
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch token status", error)
+      }
+    }
+
+    loadTokenStatus()
+  }, [])
   const handlePostToInstagram = async () => {
     if (!image || isPosting) return;
 
@@ -334,6 +362,19 @@ export default function PanoramaDetailPage({
           </Button>
         </Link>
       </div>
+
+      {tokenWarning ? (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Info className="h-4 w-4" />
+          <span>
+            {tokenWarning}{" "}
+            <Link href="/admin/instagram-token" className="underline">
+              Update token
+            </Link>
+            .
+          </span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Images Section */}
