@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Instagram } from 'lucide-react';
 import Link from 'next/link';
 import { getAllImages, deleteImage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
@@ -58,6 +58,61 @@ export default function LibraryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [postingId, setPostingId] = useState<string | null>(null);
+  const handlePostToInstagram = async (
+    image: PanoramaImage,
+    event?: React.MouseEvent
+  ) => {
+    event?.stopPropagation()
+    if (postingId) return
+
+    const confirmed = window.confirm(
+      `Post "${image.title || 'this panorama'}" to Instagram now?`
+    )
+
+    if (!confirmed) return
+
+    setPostingId(image.id)
+    try {
+      const response = await fetch('/api/instagram/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: image.id }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to post')
+      }
+
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === image.id
+            ? {
+                ...img,
+                status: 'posted',
+                posted_at: new Date().toISOString(),
+                instagram_post_id: payload.postId,
+              }
+            : img
+        )
+      )
+
+      alert(
+        `Queued for Instagram (stub). Reference: ${payload.postId ?? 'n/a'}`
+      )
+    } catch (err) {
+      console.error('Instagram post error', err)
+      alert(
+        `Failed to post to Instagram: ${
+          err instanceof Error ? err.message : 'Unknown error'
+        }`
+      )
+    } finally {
+      setPostingId(null)
+    }
+  }
+
 
   // All hooks must be called before any conditional returns
   useEffect(() => {
@@ -208,6 +263,18 @@ export default function LibraryPage() {
                       {new Date(image.date_taken).toLocaleDateString()}
                     </p>
                   )}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3 w-full"
+                    onClick={(event) => handlePostToInstagram(image, event)}
+                    disabled={postingId === image.id}
+                  >
+                    <Instagram className="mr-2 h-4 w-4" />
+                    {postingId === image.id
+                      ? 'Posting...'
+                      : 'Post to Instagram'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText, Download, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText, Download, Trash2, Instagram } from 'lucide-react';
 import Link from 'next/link';
 import { getImageMetadata, getPanelsByImageId, deleteImage, saveImageMetadata } from '@/lib/supabase/database';
 import { useEffect, useState } from 'react';
@@ -70,6 +70,51 @@ export default function PanoramaDetailPage({
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isGeneratingOptimized, setIsGeneratingOptimized] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const handlePostToInstagram = async () => {
+    if (!image || isPosting) return;
+
+    const confirmed = window.confirm(
+      `Post "${image.title || 'this panorama'}" to Instagram now?`
+    );
+
+    if (!confirmed) return;
+
+    setIsPosting(true);
+    try {
+      const response = await fetch('/api/instagram/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: image.id }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to post');
+      }
+
+      const nextImage = {
+        ...image,
+        status: 'posted',
+        posted_at: new Date().toISOString(),
+        instagram_post_id: payload.postId,
+      };
+      setImage(nextImage);
+      alert(
+        `Queued for Instagram (stub). Reference: ${payload.postId ?? 'n/a'}`
+      );
+    } catch (error) {
+      console.error('Instagram post error', error);
+      alert(
+        `Failed to post to Instagram: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
 
   // All hooks must be called before any conditional returns
   useEffect(() => {
@@ -499,6 +544,14 @@ export default function PanoramaDetailPage({
                     Edit
                   </Button>
                 </Link>
+                <Button
+                  className="w-full"
+                  onClick={handlePostToInstagram}
+                  disabled={isPosting}
+                >
+                  <Instagram className="mr-2 h-4 w-4" />
+                  {isPosting ? 'Posting...' : 'Post to Instagram'}
+                </Button>
                 <Button
                   variant="outline"
                   className="w-full"
