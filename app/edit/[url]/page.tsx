@@ -9,6 +9,14 @@ import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth-client';
 import { useState, useEffect } from 'react';
 import { getImageMetadata } from '@/lib/supabase/database';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function EditPage({
   params,
@@ -29,6 +37,10 @@ export default function EditPage({
   
   const [imageUrl, setImageUrl] = useState<string>(initialUrl);
   const [isLoadingFallback, setIsLoadingFallback] = useState(false);
+  const [pendingRecordId, setPendingRecordId] = useState<string | null>(null);
+  const [showPostDialog, setShowPostDialog] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   
   // If we have an imageId but no valid URL, try to load the image metadata to get a fallback
   useEffect(() => {
@@ -65,10 +77,47 @@ export default function EditPage({
     );
   }
 
-  const handleSave = (recordId: string) => {
-    console.log('Image saved with record ID:', recordId);
-    // Navigate to the detail page for this panorama
+  const navigateToLibrary = (recordId: string) => {
     router.push(`/library/${recordId}`);
+  };
+
+  const handleSave = (recordId: string) => {
+    setPendingRecordId(recordId);
+    setShowPostDialog(true);
+  };
+
+  const handlePostToInstagram = async () => {
+    if (!pendingRecordId) return;
+    setIsPosting(true);
+    setPostError(null);
+    try {
+      const response = await fetch('/api/instagram/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: pendingRecordId }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to post to Instagram');
+      }
+
+      setShowPostDialog(false);
+      navigateToLibrary(pendingRecordId);
+    } catch (error) {
+      console.error('Instagram post error:', error);
+      setPostError(
+        error instanceof Error ? error.message : 'Failed to post to Instagram'
+      );
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const handleSkipPosting = () => {
+    if (!pendingRecordId) return;
+    setShowPostDialog(false);
+    navigateToLibrary(pendingRecordId);
   };
 
   return (
@@ -106,6 +155,27 @@ export default function EditPage({
           )}
         </div>
       )}
+      <Dialog open={showPostDialog} onOpenChange={setShowPostDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Post to Instagram?</DialogTitle>
+            <DialogDescription>
+              Your panorama has been saved. Would you like to queue it for Instagram now?
+            </DialogDescription>
+          </DialogHeader>
+          {postError ? (
+            <p className="text-sm text-destructive">{postError}</p>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleSkipPosting} disabled={isPosting}>
+              Skip for now
+            </Button>
+            <Button onClick={handlePostToInstagram} disabled={isPosting}>
+              {isPosting ? 'Posting…' : 'Post to Instagram'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

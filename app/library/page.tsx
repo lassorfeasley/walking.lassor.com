@@ -52,9 +52,8 @@ function formatLocationForDisplay(locationName: string): string {
 }
 
 interface TokenStatus {
-  token_hint: string
-  expires_at: string
-  instagram_business_account_id?: string
+  last_refreshed_at: string
+  refresher_note?: string
 }
 
 export default function LibraryPage() {
@@ -133,17 +132,18 @@ export default function LibraryPage() {
         const payload = await response.json()
         if (payload?.credential) {
           setTokenStatus(payload.credential)
-          const expires = new Date(payload.credential.expires_at)
+          const refreshed = new Date(payload.credential.last_refreshed_at)
+          const expires = new Date(refreshed.getTime() + 60 * 24 * 60 * 60 * 1000)
           const today = new Date()
           const diff =
             (expires.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
           if (diff <= 10) {
             setTokenWarning(
               diff <= 0
-                ? "Instagram token expired. Update immediately to keep posting."
-                : `Instagram token expires in ${Math.ceil(
+                ? "Instagram token expired. Refresh immediately to keep posting."
+                : `Instagram token needs refresh in ${Math.ceil(
                     diff
-                  )} days. Update soon.`
+                  )} days.`
             )
           }
         }

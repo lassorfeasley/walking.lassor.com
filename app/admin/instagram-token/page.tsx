@@ -6,42 +6,24 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { AlertCircle, CheckCircle2, Info } from "lucide-react"
-import { format } from "date-fns"
+import { AlertCircle, Info } from "lucide-react"
+import { addDays, format, formatDistanceToNow } from "date-fns"
 
 interface CredentialStatus {
-  token_hint: string
-  expires_at: string
-  instagram_business_account_id?: string
-  notes?: string
-  updated_at: string
-  updated_by?: string
-}
-
-interface VerificationResult {
-  success: boolean
-  profile?: {
-    id: string
-    name: string
-    email?: string | null
-  }
-  error?: string
+  last_refreshed_at: string
+  refresher_note?: string
 }
 
 export default function InstagramTokenAdminPage() {
   const [loadingStatus, setLoadingStatus] = useState(true)
-  const [status, setStatus] = useState<CredentialStatus | null>(null)
-  const [expiresAt, setExpiresAt] = useState("")
-  const [tokenHint, setTokenHint] = useState("")
-  const [businessId, setBusinessId] = useState("")
-  const [notes, setNotes] = useState("")
-  const [verificationToken, setVerificationToken] = useState("")
-  const [verificationResult, setVerificationResult] =
-    useState<VerificationResult | null>(null)
+  const [history, setHistory] = useState<CredentialStatus[]>([])
+  const [refreshDate, setRefreshDate] = useState("")
+  const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
-  const [verifyLoading, setVerifyLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [shortToken, setShortToken] = useState("")
+  const [appSecret, setAppSecret] = useState("")
+  const [exchangeUrl, setExchangeUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const loadStatus = async () => {
@@ -51,12 +33,13 @@ export default function InstagramTokenAdminPage() {
         if (!response.ok) {
           throw new Error(payload.error || "Failed to load status")
         }
-        if (payload.credential) {
-          setStatus(payload.credential)
-          setExpiresAt(payload.credential.expires_at.slice(0, 10))
-          setTokenHint(payload.credential.token_hint)
-          setBusinessId(payload.credential.instagram_business_account_id ?? "")
-          setNotes(payload.credential.notes ?? "")
+        if (payload.credentials) {
+          setHistory(payload.credentials)
+          if (payload.credentials.length > 0) {
+            const latest = payload.credentials[0]
+            setRefreshDate(latest.last_refreshed_at.slice(0, 10))
+            setNote(latest.refresher_note ?? "")
+          }
         }
       } catch (err) {
         console.error(err)
@@ -69,40 +52,11 @@ export default function InstagramTokenAdminPage() {
     loadStatus()
   }, [])
 
-  const handleVerify = async () => {
-    if (!verificationToken) {
-      setVerificationResult({
-        success: false,
-        error: "Provide a token to verify.",
-      })
-      return
-    }
-
-    setVerifyLoading(true)
-    try {
-      const response = await fetch("/api/admin/instagram-token/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: verificationToken }),
-      })
-      const payload = await response.json()
-      setVerificationResult(payload)
-    } catch (err) {
-      setVerificationResult({
-        success: false,
-        error: err instanceof Error ? err.message : "Verification failed",
-      })
-    } finally {
-      setVerifyLoading(false)
-    }
-  }
-
   const handleSave = async () => {
-    if (!expiresAt || !tokenHint) {
-      setError("Expiration date and token hint are required.")
+    if (!refreshDate) {
+      setError("Select the date you refreshed the token.")
       return
     }
-
     setSaving(true)
     setError(null)
     try {
@@ -110,17 +64,15 @@ export default function InstagramTokenAdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tokenHint: tokenHint.trim(),
-          expiresAt,
-          instagramBusinessAccountId: businessId || undefined,
-          notes: notes || undefined,
+          refreshedAt: refreshDate,
+          refresherNote: note || undefined,
         }),
       })
       const payload = await response.json()
       if (!response.ok) {
         throw new Error(payload.error || "Failed to save status")
       }
-      setStatus(payload.credential)
+      setHistory([payload.credential, ...history])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save status")
     } finally {
@@ -128,137 +80,104 @@ export default function InstagramTokenAdminPage() {
     }
   }
 
-  return (
-    <div className="container mx-auto px-4 py-10">
-      <div className="mb-8 space-y-2">
-        <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
-          Admin
-        </p>
-        <h1 className="text-3xl font-semibold">Instagram Token Management</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
-          Store metadata about your long-lived Instagram token, verify new
-          tokens, and keep track of expiration dates. The actual token should be
-          pasted into your Vercel environment variables—this page only records
-          the last 4 characters and expiration info.
-        </p>
-      </div>
+  const buildExchangeUrl = () => {
+    if (!shortToken || !appSecret) {
+      setExchangeUrl(null)
+      return
+    }
+    const params = new URLSearchParams({
+      grant_type: "fb_exchange_token",
+      client_id: "APP_ID",
+      client_secret: appSecret.trim(),
+      fb_exchange_token: shortToken.trim(),
+    })
+    setExchangeUrl(
+      `https://graph.facebook.com/v21.0/oauth/access_token?${params.toString()}`
+    )
+  }
 
-      <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Token Verification</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+  return (
+    <div className="container mx-auto px-4 py-10 space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Long-lived token URL builder</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <p>
+            1. Paste the short-lived token from{" "}
+            <a
+              href="https://developers.facebook.com/tools/explorer/"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Graph API Explorer
+            </a>
+            .
+          </p>
+          <p>
+            2. Paste the app secret (find it on{" "}
+            <a
+              href="https://developers.facebook.com/apps/1538979573913777/settings/basic/"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              App Settings &gt; Basic
+            </a>
+            ).
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="verification-token">
-                Long-lived token (temporary input)
-              </Label>
-              <Textarea
-                id="verification-token"
-                value={verificationToken}
-                onChange={(e) => setVerificationToken(e.target.value)}
-                placeholder="Paste the long-lived token here to verify"
-                rows={4}
+              <Label htmlFor="short-token">Short-lived token</Label>
+              <textarea
+                id="short-token"
+                className="min-h-[120px] w-full rounded-md border bg-background p-2 text-xs"
+                value={shortToken}
+                onChange={(e) => setShortToken(e.target.value)}
               />
             </div>
-            <div className="flex gap-3">
-              <Button onClick={handleVerify} disabled={verifyLoading}>
-                {verifyLoading ? "Verifying..." : "Verify token"}
-              </Button>
+            <div className="space-y-2">
+              <Label htmlFor="app-secret">App secret</Label>
+              <textarea
+                id="app-secret"
+                className="min-h-[120px] w-full rounded-md border bg-background p-2 text-xs"
+                placeholder="Paste the Facebook app secret here..."
+                value={appSecret}
+                onChange={(e) => setAppSecret(e.target.value)}
+              />
+            </div>
+          </div>
+          <Button type="button" onClick={buildExchangeUrl}>
+            Generate exchange URL
+          </Button>
+          {exchangeUrl ? (
+            <div className="space-y-2">
+              <div className="rounded border bg-background p-3 text-xs break-all">
+                {exchangeUrl}
+              </div>
               <Button
-                type="button"
+                asChild
                 variant="outline"
-                onClick={() => setVerificationToken("")}
+                size="sm"
               >
-                Clear
+                <a href={exchangeUrl} target="_blank" rel="noreferrer">
+                  Open exchange URL in new tab
+                </a>
               </Button>
             </div>
-            {verificationResult?.success && verificationResult.profile ? (
-              <div className="flex items-center gap-2 rounded-md bg-emerald-100/60 p-3 text-sm text-emerald-900">
-                <CheckCircle2 className="h-4 w-4" />
-                Verified as {verificationResult.profile.name} (
-                {verificationResult.profile.id})
-              </div>
-            ) : null}
-            {verificationResult && !verificationResult.success ? (
-              <div className="flex items-center gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
-                <AlertCircle className="h-4 w-4" />
-                {verificationResult.error ?? "Token verification failed"}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+          ) : null}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Current Status</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            {loadingStatus ? (
-              <p className="text-muted-foreground">Loading current status...</p>
-            ) : status ? (
-              <div className="space-y-2">
-                <p>
-                  <span className="font-medium">Token hint:</span>{" "}
-                  {status.token_hint}
-                </p>
-                <p>
-                  <span className="font-medium">Expires:</span>{" "}
-                  {format(new Date(status.expires_at), "PPP")}
-                </p>
-                {status.instagram_business_account_id ? (
-                  <p>
-                    <span className="font-medium">IG Business ID:</span>{" "}
-                    {status.instagram_business_account_id}
-                  </p>
-                ) : null}
-                {status.notes ? (
-                  <p className="text-muted-foreground">{status.notes}</p>
-                ) : null}
-              </div>
-            ) : (
-              <p className="text-muted-foreground">
-                No token metadata stored. Use the form below to add details once
-                you generate a token.
-              </p>
-            )}
-
-            <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground space-y-2">
-              <div className="flex items-center gap-2 font-medium text-foreground">
-                <Info className="h-4 w-4" />
-                Quick reference
-              </div>
-              <ol className="list-decimal space-y-1 pl-5">
-                <li>
-                  In Graph API Explorer, select the app, add permissions
-                  (<code>instagram_basic</code>, <code>instagram_content_publish</code>,{" "}
-                  <code>pages_show_list</code>, <code>pages_read_engagement</code>), click
-                  “Generate Access Token”.
-                </li>
-                <li>
-                  Exchange it for a 60-day token:
-                  <pre className="mt-1 rounded bg-background p-2">
-                    {`https://graph.facebook.com/v21.0/oauth/access_token?
-grant_type=fb_exchange_token
-&client_id=APP_ID
-&client_secret=APP_SECRET
-&fb_exchange_token=SHORT_TOKEN`}
-                  </pre>
-                </li>
-                <li>
-                  Paste the new token into Vercel (Preview + Production) as{" "}
-                  <code>INSTAGRAM_ACCESS_TOKEN</code> and record the last 4 chars +
-                  expiry below.
-                </li>
-              </ol>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="mt-6">
+      <Card>
         <CardHeader>
-          <CardTitle>Save metadata</CardTitle>
+          <CardTitle>Mark token refreshed</CardTitle>
+          <p className="text-muted-foreground text-sm">
+            Use this form immediately after pasting the new long-lived token into
+            your environment variables. We’ll remind you 10 days before the next
+            refresh window.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {error ? (
@@ -269,49 +188,73 @@ grant_type=fb_exchange_token
           ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="token-hint">Token hint (last 4 chars)</Label>
+              <Label htmlFor="refresh-date">Token refreshed on</Label>
               <Input
-                id="token-hint"
-                value={tokenHint}
-                onChange={(e) => setTokenHint(e.target.value)}
-                placeholder="e.g., 5XQK"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="expires-at">Expiration date</Label>
-              <Input
-                id="expires-at"
+                id="refresh-date"
                 type="date"
-                value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="business-id">Instagram Business Account ID</Label>
-              <Input
-                id="business-id"
-                value={businessId}
-                onChange={(e) => setBusinessId(e.target.value)}
-                placeholder="1784..."
+                value={refreshDate}
+                onChange={(e) => setRefreshDate(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="refresh-note">Notes (optional)</Label>
               <Input
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional context"
+                id="refresh-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g., Updated on staging + prod"
               />
             </div>
           </div>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save metadata"}
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save refresh date"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRefreshDate(new Date().toISOString().slice(0, 10))
+                setNote("")
+              }}
+            >
+              Mark as today
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      {history.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Refresh history</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {history.map((entry) => (
+              <div
+                key={entry.last_refreshed_at}
+                className="rounded-lg border p-3 text-sm"
+              >
+                <p className="font-medium">
+                  {format(new Date(entry.last_refreshed_at), "PPP")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Next due:{" "}
+                  {format(
+                    addDays(new Date(entry.last_refreshed_at), 60),
+                    "PPP"
+                  )}
+                </p>
+                {entry.refresher_note ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {entry.refresher_note}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

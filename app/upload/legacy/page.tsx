@@ -378,7 +378,7 @@ export default function LegacyUploadPage() {
     setError(null);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (postToInstagram: boolean = false) => {
     // At least one file (original or processed) should be uploaded
     if (!originalFile && !processedFile) {
       setError('Please upload at least the original or processed panorama');
@@ -522,6 +522,28 @@ export default function LegacyUploadPage() {
       // Save panels
       if (panelUrls.length > 0 && saved.id) {
         await savePanels(saved.id, panelUrls);
+      }
+
+      if (postToInstagram && saved.id) {
+        try {
+          const response = await fetch('/api/instagram/post', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageId: saved.id }),
+          });
+
+          const payload = await response.json();
+          if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'Instagram post failed');
+          }
+        } catch (error) {
+          console.error('Instagram post error:', error);
+          alert(
+            `Image saved, but failed to post to Instagram: ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`
+          );
+        }
       }
 
       // Success - redirect to library
@@ -723,13 +745,18 @@ export default function LegacyUploadPage() {
             onChange={setMetadata}
             existingTags={existingTags}
           />
-          <div className="flex justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Button variant="outline" onClick={() => setStep('upload')}>
               Back
             </Button>
-            <Button onClick={handleSave} disabled={isUploading}>
-              {isUploading ? 'Saving...' : 'Save Image'}
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button onClick={() => handleSave(false)} disabled={isUploading}>
+                {isUploading ? 'Saving...' : 'Save Image'}
+              </Button>
+              <Button onClick={() => handleSave(true)} disabled={isUploading}>
+                {isUploading ? 'Saving...' : 'Save and post to Instagram'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

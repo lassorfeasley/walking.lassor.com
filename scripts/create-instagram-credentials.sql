@@ -1,16 +1,14 @@
 create table if not exists public.instagram_credentials (
   id uuid primary key default gen_random_uuid(),
-  token_hint text not null,
-  expires_at timestamptz not null,
-  instagram_business_account_id text,
-  notes text,
+  last_refreshed_at timestamptz not null default timezone('utc', now()),
+  refresher_note text,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   updated_by uuid references auth.users(id)
 );
 
-create index if not exists instagram_credentials_expires_at_idx
-  on public.instagram_credentials (expires_at desc);
+create index if not exists instagram_credentials_refreshed_idx
+  on public.instagram_credentials (last_refreshed_at desc);
 
 alter table public.instagram_credentials enable row level security;
 

@@ -16,11 +16,9 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
       .from('instagram_credentials')
       .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .single()
+      .order('last_refreshed_at', { ascending: false })
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       console.error('Failed to load instagram credentials', error)
       return NextResponse.json(
         { error: 'Failed to load Instagram token status' },
@@ -28,7 +26,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ credential: data ?? null })
+    return NextResponse.json({ credentials: data ?? [] })
   } catch (error) {
     console.error('Instagram token status GET failed', error)
     return NextResponse.json(
@@ -50,24 +48,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as {
-      tokenHint: string
-      expiresAt: string
-      instagramBusinessAccountId?: string
-      notes?: string
-    }
-
-    if (!body?.tokenHint || !body?.expiresAt) {
-      return NextResponse.json(
-        { error: 'tokenHint and expiresAt are required' },
-        { status: 400 }
-      )
+      refresherNote?: string
+      refreshedAt?: string
     }
 
     const payload = {
-      token_hint: body.tokenHint,
-      expires_at: body.expiresAt,
-      instagram_business_account_id: body.instagramBusinessAccountId ?? null,
-      notes: body.notes ?? null,
+      last_refreshed_at: body.refreshedAt ?? new Date().toISOString(),
+      refresher_note: body.refresherNote ?? null,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     }

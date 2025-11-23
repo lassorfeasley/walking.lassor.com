@@ -79,7 +79,8 @@ export default function PanoramaDetailPage({
         if (!response.ok) return
         const payload = await response.json()
         if (payload?.credential) {
-          const expires = new Date(payload.credential.expires_at)
+          const refreshed = new Date(payload.credential.last_refreshed_at)
+          const expires = new Date(refreshed.getTime() + 60 * 24 * 60 * 60 * 1000)
           const today = new Date()
           const diff =
             (expires.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)

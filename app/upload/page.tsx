@@ -26,7 +26,7 @@ export default function UploadPage() {
     );
   }
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, postToInstagram: boolean = false) => {
     setIsUploading(true);
     setError(null);
 
