@@ -70,7 +70,7 @@ export async function getAllImages(): Promise<PanoramaImage[]> {
   const { data, error } = await supabase
     .from('panorama_images')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('date_taken', { ascending: false });
 
   if (error) {
     console.error('Error fetching all images:', error);
