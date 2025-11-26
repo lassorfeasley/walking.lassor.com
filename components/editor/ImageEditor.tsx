@@ -27,7 +27,6 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const [rotation, setRotation] = useState(0);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   const [croppedAreaRelative, setCroppedAreaRelative] = useState<any>(null);
-  const [adjustedCropArea, setAdjustedCropArea] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [panelCount, setPanelCount] = useState<number>(3);
   const [filters, setFilters] = useState({
     brightness: 100,
@@ -219,20 +218,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       // Use react-easy-crop's accurate calculation
       setCroppedAreaPixels(croppedAreaPixels);
       setCroppedAreaRelative(croppedArea);
-      
-      // Calculate adjusted crop area for preview overlay
-      if (imageRef.current && imageRef.current.naturalWidth > 0 && croppedAreaPixels) {
-        const adjusted = calculateAdjustedCropArea(
-          croppedAreaPixels,
-          imageRef.current.naturalWidth,
-          imageRef.current.naturalHeight
-        );
-        setAdjustedCropArea(adjusted);
-      } else {
-        setAdjustedCropArea(null);
-      }
     },
-    [aspectRatioValue, panelCount, zoom, rotation, calculateAdjustedCropArea]
+    [aspectRatioValue, panelCount, zoom, rotation]
   );
 
   // Also update crop area during dragging for real-time preview
@@ -501,6 +488,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
             
             // Set initial visual state to match these loaded adjustments
             // This ensures the "Has Visual Changes" check works correctly against the saved state
+            console.log('=== SETTING INITIAL STATE FROM EXISTING ADJUSTMENTS ===');
+            console.log('Existing adjustments:', existing.adjustments);
             initialVisualStateRef.current = {
               crop: existing.adjustments.crop,
               zoom: existing.adjustments.zoom,
@@ -510,6 +499,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
               panelCount: existing.panel_count || 3,
               croppedAreaPixels: null // Will be populated by the cropper on mount
             };
+            console.log('Initial state set:', initialVisualStateRef.current);
           }
 
           // Store existing image URLs
@@ -558,6 +548,8 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       (existingImageUrls.processed_url || imageId)
     ) {
       // This is an existing image and we're setting the initial visual state
+      console.log('=== SETTING INITIAL STATE FROM CURRENT STATE (no existing adjustments) ===');
+      console.log('Current filters:', filters);
       initialVisualStateRef.current = {
         crop: { ...crop },
         zoom,
@@ -577,6 +569,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         panelCount: existingImageUrls.panel_count || panelCount,
         croppedAreaPixels: { ...croppedAreaPixels },
       };
+      console.log('Initial state set:', initialVisualStateRef.current);
     }
   }, [croppedAreaPixels, imageId, existingImageUrls.processed_url, existingImageUrls.panel_count, crop, zoom, rotation, filters, selectiveColor, panelCount]);
 
@@ -588,51 +581,60 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
     }
   }, [imageRef.current?.complete, croppedAreaPixels]);
 
-  // Update adjusted crop area when image dimensions or panel count changes
-  useEffect(() => {
-    if (imageRef.current && imageRef.current.naturalWidth > 0 && croppedAreaPixels) {
-      const adjusted = calculateAdjustedCropArea(
-        croppedAreaPixels,
-        imageRef.current.naturalWidth,
-        imageRef.current.naturalHeight
-      );
-      setAdjustedCropArea(adjusted);
-    }
-  }, [croppedAreaPixels, panelCount, imageRef.current?.naturalWidth, imageRef.current?.naturalHeight, calculateAdjustedCropArea]);
-
   // Check if visual changes have been made
   const hasVisualChanges = useCallback((): boolean => {
     const initial = initialVisualStateRef.current;
     
+    console.log('=== HAS VISUAL CHANGES DEBUG ===');
+    console.log('Initial state:', initial);
+    console.log('Current filters:', filters);
+    console.log('Current selectiveColor:', selectiveColor);
+    
     // If no initial state recorded, assume it's a new image (always regenerate)
     if (!initial) {
+      console.log('No initial state - returning true (new image)');
       return true;
     }
 
     // Check crop position
     if (Math.abs(crop.x - initial.crop.x) > 0.1 || Math.abs(crop.y - initial.crop.y) > 0.1) {
+      console.log('Crop position changed');
       return true;
     }
 
     // Check zoom
     if (Math.abs(zoom - initial.zoom) > 0.01) {
+      console.log('Zoom changed:', { current: zoom, initial: initial.zoom });
       return true;
     }
 
     // Check rotation
     if (rotation !== initial.rotation) {
+      console.log('Rotation changed:', { current: rotation, initial: initial.rotation });
       return true;
     }
 
     // Check filters
+    const filterChanges = {
+      brightness: Math.abs(filters.brightness - initial.filters.brightness),
+      contrast: Math.abs(filters.contrast - initial.filters.contrast),
+      saturation: Math.abs(filters.saturation - initial.filters.saturation),
+      exposure: Math.abs(filters.exposure - initial.filters.exposure),
+      highlights: Math.abs(filters.highlights - initial.filters.highlights),
+      shadows: Math.abs(filters.shadows - initial.filters.shadows),
+    };
+    console.log('Filter changes:', filterChanges);
+    console.log('Initial filters:', initial.filters);
+    
     if (
-      Math.abs(filters.brightness - initial.filters.brightness) > 0.1 ||
-      Math.abs(filters.contrast - initial.filters.contrast) > 0.1 ||
-      Math.abs(filters.saturation - initial.filters.saturation) > 0.1 ||
-      Math.abs(filters.exposure - initial.filters.exposure) > 0.1 ||
-      Math.abs(filters.highlights - initial.filters.highlights) > 0.1 ||
-      Math.abs(filters.shadows - initial.filters.shadows) > 0.1
+      filterChanges.brightness > 0.1 ||
+      filterChanges.contrast > 0.1 ||
+      filterChanges.saturation > 0.1 ||
+      filterChanges.exposure > 0.1 ||
+      filterChanges.highlights > 0.1 ||
+      filterChanges.shadows > 0.1
     ) {
+      console.log('Filters changed - returning true');
       return true;
     }
 
@@ -645,12 +647,14 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         Math.abs(current.saturation - initialAdj.saturation) > 0.1 ||
         Math.abs(current.luminance - initialAdj.luminance) > 0.1
       ) {
+        console.log(`Selective color ${color} changed`);
         return true;
       }
     }
 
     // Check panel count
     if (panelCount !== initial.panelCount) {
+      console.log('Panel count changed:', { current: panelCount, initial: initial.panelCount });
       return true;
     }
 
@@ -662,13 +666,16 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         Math.abs(croppedAreaPixels.width - initial.croppedAreaPixels.width) > 0.1 ||
         Math.abs(croppedAreaPixels.height - initial.croppedAreaPixels.height) > 0.1
       ) {
+        console.log('Crop area changed');
         return true;
       }
     } else if (croppedAreaPixels !== initial.croppedAreaPixels) {
       // One is null and the other isn't
+      console.log('Crop area null state changed');
       return true;
     }
 
+    console.log('No visual changes detected - returning false');
     return false;
   }, [crop, zoom, rotation, filters, selectiveColor, panelCount, croppedAreaPixels]);
 
@@ -687,13 +694,47 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
       const hasExistingUrls = !!existingImageUrls.processed_url;
       const panelCountChanged = existingImageUrls.panel_count !== undefined && panelCount !== existingImageUrls.panel_count;
       
+      console.log('=== SAVE DEBUG ===');
+      console.log('visualChangesDetected:', visualChangesDetected);
+      console.log('hasExistingUrls:', hasExistingUrls);
+      console.log('panelCountChanged:', panelCountChanged);
+      console.log('croppedAreaPixels exists:', !!croppedAreaPixels);
+      console.log('imageRef.current exists:', !!imageRef.current);
+      
       // First, export the processed image if needed
       let processedUrl = imageUrl;
       let thumbnailUrl: string | undefined;
       let previewUrl: string | undefined;
       
-      // Only regenerate images if visual changes were detected, panel count changed, or if no existing URLs exist
-      if ((visualChangesDetected || panelCountChanged) && croppedAreaPixels && imageRef.current) {
+      // Explicit check for filter changes as a safety net
+      // This ensures filters are always applied even if hasVisualChanges() fails
+      const initialFilters = initialVisualStateRef.current?.filters;
+      const hasFilterChanges = !initialFilters || 
+        Math.abs(filters.brightness - initialFilters.brightness) > 0.1 ||
+        Math.abs(filters.contrast - initialFilters.contrast) > 0.1 ||
+        Math.abs(filters.saturation - initialFilters.saturation) > 0.1 ||
+        Math.abs(filters.exposure - initialFilters.exposure) > 0.1 ||
+        Math.abs(filters.highlights - initialFilters.highlights) > 0.1 ||
+        Math.abs(filters.shadows - initialFilters.shadows) > 0.1;
+      
+      // Check selective color changes
+      const initialSelectiveColor = initialVisualStateRef.current?.selectiveColor;
+      const hasSelectiveColorChanges = !initialSelectiveColor || 
+        (['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'] as const).some(color => {
+          const current = selectiveColor.adjustments[color];
+          const initialAdj = initialSelectiveColor.adjustments[color];
+          return Math.abs(current.saturation - initialAdj.saturation) > 0.1 ||
+                 Math.abs(current.luminance - initialAdj.luminance) > 0.1;
+        });
+      
+      console.log('hasFilterChanges:', hasFilterChanges);
+      console.log('hasSelectiveColorChanges:', hasSelectiveColorChanges);
+      
+      // Only regenerate images if visual changes were detected, panel count changed, filter changes detected, or if no existing URLs exist
+      const shouldRegenerate = (!hasExistingUrls || visualChangesDetected || panelCountChanged || hasFilterChanges || hasSelectiveColorChanges) && croppedAreaPixels && imageRef.current;
+      console.log('shouldRegenerate:', shouldRegenerate);
+      
+      if (shouldRegenerate) {
         // Process and upload the image
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -824,16 +865,32 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           rightCrop: filteredImg.naturalWidth - (croppedAreaPixels.x + croppedAreaPixels.width),
         });
 
+        // Calculate crop pixels from relative percentages if available
+        // This handles the case where the preview image (used for cropping UI) 
+        // has different dimensions than the full resolution image being processed.
+        let cropPixelsForProcessing = croppedAreaPixels;
+        
+        if (croppedAreaRelative && filteredImg.naturalWidth && filteredImg.naturalHeight) {
+             console.log('Recalculating crop pixels from relative percentages:', croppedAreaRelative);
+             cropPixelsForProcessing = {
+                x: Math.round((croppedAreaRelative.x / 100) * filteredImg.naturalWidth),
+                y: Math.round((croppedAreaRelative.y / 100) * filteredImg.naturalHeight),
+                width: Math.round((croppedAreaRelative.width / 100) * filteredImg.naturalWidth),
+                height: Math.round((croppedAreaRelative.height / 100) * filteredImg.naturalHeight),
+             };
+             console.log('Recalculated pixels:', cropPixelsForProcessing);
+        }
+
         // Apply aspect ratio constraint programmatically
         // The cropper now allows free selection, but we need to enforce the panel aspect ratio
         const finalCropArea = calculateAdjustedCropArea(
-          croppedAreaPixels,
+          cropPixelsForProcessing,
           filteredImg.naturalWidth,
           filteredImg.naturalHeight
         );
         
         console.log('Aspect ratio adjustment:', {
-          original: croppedAreaPixels,
+          original: cropPixelsForProcessing,
           adjusted: finalCropArea,
           requiredAspectRatio: aspectRatioValue(),
           originalAspectRatio: croppedAreaPixels.width / croppedAreaPixels.height,
@@ -844,15 +901,31 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         // Use PNG for truly lossless quality (for archival and print quality)
         // Note: croppedAreaPixels coordinates are relative to original image dimensions
         // since we always use imageUrl in the Cropper component
-        const croppedBlob = await cropImage(filteredImg, finalCropArea, undefined, 'png');
+        let croppedBlob = await cropImage(filteredImg, finalCropArea, undefined, 'png');
+        let fileExtension = 'png';
+        let mimeType = 'image/png';
+
+        // Check if PNG is too large (over 45MB, leaving 5MB buffer for safety)
+        // Supabase free tier limit is 50MB. PNGs for panoramas can easily exceed this.
+        if (croppedBlob.size > 45 * 1024 * 1024) {
+          console.warn(`Generated PNG is too large (${(croppedBlob.size / 1024 / 1024).toFixed(2)}MB). Falling back to high-quality JPEG.`);
+          
+          // Fallback to JPEG with high quality (0.95)
+          // This will likely reduce size by 90% while maintaining excellent visual quality
+          croppedBlob = await cropImage(filteredImg, finalCropArea, undefined, 'jpeg', 0.95);
+          fileExtension = 'jpg';
+          mimeType = 'image/jpeg';
+          
+          console.log(`Fallback JPEG size: ${(croppedBlob.size / 1024 / 1024).toFixed(2)}MB`);
+        }
         
         // Revoke URL after image is used
         URL.revokeObjectURL(filteredImgUrl);
         const timestamp = Date.now();
         
-        // Save processed version as PNG (lossless) for print quality
-        const processedFile = new File([croppedBlob], `processed-${timestamp}.png`, {
-          type: 'image/png',
+        // Save processed version
+        const processedFile = new File([croppedBlob], `processed-${timestamp}.${fileExtension}`, {
+          type: mimeType,
         });
 
         const result = await uploadFile(processedFile, {
@@ -897,12 +970,25 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           if (previewResult) {
             previewUrl = previewResult.url;
           }
+        } else {
+          // If upload failed, throw an error to stop the save process
+          throw new Error('Failed to upload processed image. The file might be too large or there was a network error.');
         }
-      } else if (!visualChangesDetected && !panelCountChanged && hasExistingUrls) {
-        // No visual changes detected - use existing URLs
+      } else if (!visualChangesDetected && !panelCountChanged && !hasFilterChanges && !hasSelectiveColorChanges && hasExistingUrls) {
+        // No visual changes detected and no filter changes - use existing URLs
+        console.log('Using existing URLs - no changes detected');
         processedUrl = existingImageUrls.processed_url || imageUrl;
         thumbnailUrl = existingImageUrls.thumbnail_url;
         previewUrl = existingImageUrls.preview_url;
+      } else {
+        console.log('Skipping regeneration - missing requirements:', {
+          visualChangesDetected,
+          panelCountChanged,
+          hasFilterChanges,
+          hasSelectiveColorChanges,
+          hasCroppedAreaPixels: !!croppedAreaPixels,
+          hasImageRef: !!imageRef.current
+        });
       }
 
       // Generate and save panels
@@ -1116,8 +1202,20 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
       // Apply aspect ratio constraint programmatically
       // The cropper now allows free selection, but we need to enforce the panel aspect ratio
+      
+      // Calculate crop pixels from relative percentages if available to ensure correct scaling
+      let cropPixelsForProcessing = croppedAreaPixels;
+      if (croppedAreaRelative && filteredImg.naturalWidth && filteredImg.naturalHeight) {
+           cropPixelsForProcessing = {
+              x: Math.round((croppedAreaRelative.x / 100) * filteredImg.naturalWidth),
+              y: Math.round((croppedAreaRelative.y / 100) * filteredImg.naturalHeight),
+              width: Math.round((croppedAreaRelative.width / 100) * filteredImg.naturalWidth),
+              height: Math.round((croppedAreaRelative.height / 100) * filteredImg.naturalHeight),
+           };
+      }
+
       const finalCropArea = calculateAdjustedCropArea(
-        croppedAreaPixels,
+        cropPixelsForProcessing,
         filteredImg.naturalWidth,
         filteredImg.naturalHeight
       );
@@ -1469,53 +1567,6 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                         cropShape="rect"
                         zoomWithScroll={false}
                       />
-                      {/* Adjusted crop area overlay - shows what will actually be cropped */}
-                      {adjustedCropArea && croppedAreaPixels && croppedAreaRelative && imageRef.current && imageRef.current.naturalWidth > 0 && (
-                        (() => {
-                          // Calculate the relationship between absolute and relative coordinates
-                          // The relative coordinates are percentages of the cropper container
-                          // The absolute coordinates are pixels in the original image
-                          // We need to find how the image is displayed to convert between them
-                          
-                          // Calculate scale factors: how much the relative area represents in absolute pixels
-                          const relativeToAbsoluteScaleX = croppedAreaPixels.width / croppedAreaRelative.width;
-                          const relativeToAbsoluteScaleY = croppedAreaPixels.height / croppedAreaRelative.height;
-                          
-                          // Calculate the offset in relative coordinates
-                          // Convert absolute offset to relative offset using the scale
-                          const offsetXAbsolute = adjustedCropArea.x - croppedAreaPixels.x;
-                          const offsetYAbsolute = adjustedCropArea.y - croppedAreaPixels.y;
-                          const offsetXRelative = offsetXAbsolute / relativeToAbsoluteScaleX;
-                          const offsetYRelative = offsetYAbsolute / relativeToAbsoluteScaleY;
-                          
-                          // Calculate scale factors for width/height
-                          const scaleX = adjustedCropArea.width / croppedAreaPixels.width;
-                          const scaleY = adjustedCropArea.height / croppedAreaPixels.height;
-                          
-                          // Apply to relative coordinates
-                          const adjustedRelativeX = croppedAreaRelative.x + offsetXRelative;
-                          const adjustedRelativeY = croppedAreaRelative.y + offsetYRelative;
-                          const adjustedRelativeWidth = croppedAreaRelative.width * scaleX;
-                          const adjustedRelativeHeight = croppedAreaRelative.height * scaleY;
-                          
-                          return (
-                            <div
-                              className="absolute pointer-events-none z-30 border-2 border-yellow-400 border-dashed"
-                              style={{
-                                left: `${adjustedRelativeX}%`,
-                                top: `${adjustedRelativeY}%`,
-                                width: `${adjustedRelativeWidth}%`,
-                                height: `${adjustedRelativeHeight}%`,
-                                boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 8px rgba(251, 191, 36, 0.6)',
-                              }}
-                            >
-                              <div className="absolute -top-6 left-0 bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded font-medium whitespace-nowrap">
-                                Final crop area
-                              </div>
-                            </div>
-                          );
-                        })()
-                      )}
                       {/* Loading indicator overlay */}
                       {isUpdatingPreview && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/5 pointer-events-none z-20">
@@ -1981,21 +2032,21 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                                 },
                               }))
                             }
-                            min={-100}
-                            max={100}
+                            min={-10}
+                            max={10}
                             step={0.1}
                             className="flex-1"
                           />
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <Input
                               type="number"
-                              min={-100}
-                              max={100}
+                              min={-10}
+                              max={10}
                               step={0.1}
                               value={selectiveColor.adjustments[selectiveColor.selectedColor].saturation.toFixed(1)}
                               onChange={(e) => {
                                 const value = parseFloat(e.target.value);
-                                if (!isNaN(value) && value >= -100 && value <= 100) {
+                                if (!isNaN(value) && value >= -10 && value <= 10) {
                                   setSelectiveColor((prev) => ({
                                     ...prev,
                                     adjustments: {
@@ -2034,21 +2085,21 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                                 },
                               }))
                             }
-                            min={-100}
-                            max={100}
+                            min={-10}
+                            max={10}
                             step={0.1}
                             className="flex-1"
                           />
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <Input
                               type="number"
-                              min={-100}
-                              max={100}
+                              min={-10}
+                              max={10}
                               step={0.1}
                               value={selectiveColor.adjustments[selectiveColor.selectedColor].luminance.toFixed(1)}
                               onChange={(e) => {
                                 const value = parseFloat(e.target.value);
-                                if (!isNaN(value) && value >= -100 && value <= 100) {
+                                if (!isNaN(value) && value >= -10 && value <= 10) {
                                   setSelectiveColor((prev) => ({
                                     ...prev,
                                     adjustments: {

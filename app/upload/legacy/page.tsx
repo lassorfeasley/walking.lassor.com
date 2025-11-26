@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { uploadFile, PROCESSED_BUCKET, RAW_BUCKET, OPTIMIZED_BUCKET } from '@/lib/supabase/storage';
 import { saveImageMetadata, savePanels, getAllTags } from '@/lib/supabase/database';
 import { ImageMetadataForm } from '@/components/editor/ImageMetadataForm';
-import { cropImage, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
+import { cropImage, generatePanelImages, generateWebOptimized, convertHeicToJpeg } from '@/lib/image-processing/utils';
 import type { PanoramaImage } from '@/types';
 
 interface UploadedFile {
@@ -342,7 +342,7 @@ export default function LegacyUploadPage() {
     }
   }, []);
 
-  const handleFileSelect = (
+  const handleFileSelect = async (
     type: 'original' | 'processed',
     file: File | null
   ) => {
@@ -351,19 +351,31 @@ export default function LegacyUploadPage() {
       return;
     }
 
-    // For processed images, automatically detect and crop white space
-    if (type === 'processed') {
-      const url = URL.createObjectURL(file);
-      
-      // Automatically detect and crop white space
-      autoCropWhiteSpace(file, url, 'processed', undefined, processedPanelCount);
-      return;
+    try {
+      // Convert HEIC to JPEG if needed (preserves quality)
+      const convertedFile = await convertHeicToJpeg(file);
+
+      // For processed images, automatically detect and crop white space
+      if (type === 'processed') {
+        const url = URL.createObjectURL(convertedFile);
+        
+        // Automatically detect and crop white space
+        autoCropWhiteSpace(convertedFile, url, 'processed', undefined, processedPanelCount);
+        return;
     }
 
-    // For original images, just set the file directly
-    const uploadedFile: UploadedFile = { file, uploading: false };
-    setOriginalFile(uploadedFile);
-    setError(null);
+      // For original images, just store the converted file
+      if (type === 'original') {
+        setOriginalFile({
+          file: convertedFile,
+          uploading: false,
+        });
+        setError(null);
+      }
+    } catch (error) {
+      console.error('File conversion error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to process image file');
+    }
   };
 
 

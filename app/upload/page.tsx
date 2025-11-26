@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UploadZone } from '@/components/upload/UploadZone';
 import { uploadFile } from '@/lib/supabase/storage';
-import { rotateToLandscape } from '@/lib/image-processing/utils';
+import { rotateToLandscape, convertHeicToJpeg } from '@/lib/image-processing/utils';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -42,8 +42,9 @@ export default function UploadPage() {
         throw new Error('Please upload an image file');
       }
 
-      // Rotate portrait images to landscape before uploading
-      const processedFile = await rotateToLandscape(file);
+      // Process image: convert HEIC to JPEG first (browsers can't load HEIC), then rotate portrait to landscape
+      const convertedFile = await convertHeicToJpeg(file);
+      const processedFile = await rotateToLandscape(convertedFile);
 
       // Upload to Supabase storage
       const result = await uploadFile(processedFile, {

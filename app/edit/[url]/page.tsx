@@ -42,29 +42,61 @@ export default function EditPage({
   const [isPosting, setIsPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   
-  // If we have an imageId but no valid URL, try to load the image metadata to get a fallback
+  // Backward compatibility: Check if initialUrl is a HEIC file and try to get a fallback
+  // Note: New uploads are automatically converted to JPEG, but existing HEIC files may still exist
   useEffect(() => {
-    const loadFallback = async () => {
-      if (!imageId || initialUrl) return; // Only load if we have an ID but no valid URL
+    const checkHeicAndLoadFallback = async () => {
+      // Check if the URL is a HEIC file (browsers can't display HEIC)
+      const isHeic = initialUrl?.toLowerCase().endsWith('.heic') || 
+                    initialUrl?.toLowerCase().includes('.heic?');
       
-      setIsLoadingFallback(true);
-      try {
-        const image = await getImageMetadata(imageId);
-        if (image) {
-          // Use processed_url as fallback if original_url is missing
-          const fallback = image.processed_url || image.original_url;
-          if (fallback) {
-            setImageUrl(fallback);
+      if (isHeic && imageId) {
+        // Try to load metadata to get processed_url as fallback
+        setIsLoadingFallback(true);
+        try {
+          const image = await getImageMetadata(imageId);
+          if (image) {
+            // Prefer processed_url for HEIC files
+            const fallback = image.processed_url || image.preview_url || image.original_url;
+            if (fallback && !fallback.toLowerCase().includes('.heic')) {
+              setImageUrl(fallback);
+            }
           }
+        } catch (error) {
+          console.error('Failed to load image metadata for HEIC fallback:', error);
+        } finally {
+          setIsLoadingFallback(false);
         }
-      } catch (error) {
-        console.error('Failed to load image metadata for fallback:', error);
-      } finally {
-        setIsLoadingFallback(false);
+      } else if (!imageId && initialUrl) {
+        // No imageId but we have a URL - check if it's HEIC and warn
+        if (isHeic) {
+          console.warn('HEIC file detected but no imageId provided - browser may not be able to display it');
+        }
+      } else if (!initialUrl && imageId) {
+        // No URL but we have an ID - try to load metadata
+        setIsLoadingFallback(true);
+        try {
+          const image = await getImageMetadata(imageId);
+          if (image) {
+            // Backward compatibility: Use processed_url as fallback if original_url is missing or HEIC
+            const isOriginalHeic = image.original_url?.toLowerCase().endsWith('.heic') || 
+                                  image.original_url?.toLowerCase().includes('.heic?');
+            const fallback = isOriginalHeic 
+              ? (image.processed_url || image.preview_url || image.original_url)
+              : (image.processed_url || image.original_url);
+            if (fallback) {
+              setImageUrl(fallback);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load image metadata for fallback:', error);
+        } finally {
+          setIsLoadingFallback(false);
+        }
       }
     };
     
-    loadFallback();
+    checkHeicAndLoadFallback();
   }, [imageId, initialUrl]);
 
   if (isAuthLoading) {

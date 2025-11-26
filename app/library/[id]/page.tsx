@@ -407,34 +407,55 @@ export default function PanoramaDetailPage({
               <CardTitle>Original Image</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {image.original_url ? (
-                <div className="relative w-full aspect-video overflow-hidden rounded-b-lg bg-muted">
-                  <Image
-                    src={image.original_url}
-                    alt={`${image.title || 'Panorama'} - Original`}
-                    fill
-                    className="object-contain"
-                    sizes="100vw"
-                    onError={(e) => {
-                      console.error('Failed to load original image:', image.original_url);
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="relative w-full aspect-video overflow-hidden rounded-b-lg bg-muted flex items-center justify-center">
-                  <div className="text-center p-6">
-                    <p className="text-sm text-muted-foreground mb-2">Original image not available</p>
-                    <p className="text-xs text-muted-foreground">
-                      The original image was not uploaded, but processed versions are available.
-                    </p>
-                    {image.processed_url && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Using processed image as source.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
+              {(() => {
+                // Backward compatibility: Check if original_url is a HEIC file (browsers can't display HEIC)
+                // Note: New uploads are automatically converted to JPEG, but existing HEIC files may still exist
+                const isHeic = image.original_url?.toLowerCase().endsWith('.heic') || 
+                              image.original_url?.toLowerCase().includes('.heic?');
+                
+                // Use processed_url or preview_url as fallback for HEIC files
+                const displayUrl = isHeic 
+                  ? (image.processed_url || image.preview_url || image.original_url)
+                  : image.original_url;
+                
+                if (displayUrl) {
+                  return (
+                    <div className="relative w-full aspect-video overflow-hidden rounded-b-lg bg-muted">
+                      {isHeic && (
+                        <div className="absolute top-2 left-2 z-10 bg-yellow-500/90 text-yellow-900 text-xs px-2 py-1 rounded">
+                          HEIC format - showing processed version
+                        </div>
+                      )}
+                      <Image
+                        src={displayUrl}
+                        alt={`${image.title || 'Panorama'} - ${isHeic ? 'Processed' : 'Original'}`}
+                        fill
+                        className="object-contain"
+                        sizes="100vw"
+                        onError={(e) => {
+                          console.error('Failed to load image:', displayUrl);
+                        }}
+                      />
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="relative w-full aspect-video overflow-hidden rounded-b-lg bg-muted flex items-center justify-center">
+                      <div className="text-center p-6">
+                        <p className="text-sm text-muted-foreground mb-2">Original image not available</p>
+                        <p className="text-xs text-muted-foreground">
+                          The original image was not uploaded, but processed versions are available.
+                        </p>
+                        {image.processed_url && (
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Using processed image as source.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
             </CardContent>
           </Card>
 
@@ -576,19 +597,31 @@ export default function PanoramaDetailPage({
           <Card>
             <CardContent className="pt-6">
               <div className="flex flex-col gap-2">
-                <Link
-                  href={`/edit/${encodeURIComponent(image.original_url || image.processed_url || '')}${image.id ? `?id=${image.id}` : ''}`}
-                  className="w-full"
-                >
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    disabled={!image.original_url && !image.processed_url}
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit
-                  </Button>
-                </Link>
+                {(() => {
+                  // Backward compatibility: Prefer processed_url if original_url is HEIC (browsers can't display HEIC)
+                  // Note: New uploads are automatically converted to JPEG, but existing HEIC files may still exist
+                  const isOriginalHeic = image.original_url?.toLowerCase().endsWith('.heic') || 
+                                        image.original_url?.toLowerCase().includes('.heic?');
+                  const editUrl = isOriginalHeic 
+                    ? (image.processed_url || image.preview_url || image.original_url || '')
+                    : (image.original_url || image.processed_url || '');
+                  
+                  return (
+                    <Link
+                      href={`/edit/${encodeURIComponent(editUrl)}${image.id ? `?id=${image.id}` : ''}`}
+                      className="w-full"
+                    >
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        disabled={!image.original_url && !image.processed_url}
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit
+                      </Button>
+                    </Link>
+                  );
+                })()}
                 <Button
                   className="w-full"
                   onClick={handlePostToInstagram}

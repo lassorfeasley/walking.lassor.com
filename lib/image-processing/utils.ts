@@ -91,6 +91,151 @@ export function cropImage(
 }
 
 /**
+ * Convert HEIC/HEIF image to JPEG format with maximum quality
+ * If the file is not HEIC/HEIF, returns it unchanged
+ * @param file The image file to convert
+ * @returns Promise that resolves to a File with the converted JPEG (or original if not HEIC)
+ */
+export async function convertHeicToJpeg(file: File): Promise<File> {
+  // Check if file is HEIC/HEIF format
+  const fileName = file.name.toLowerCase();
+  const fileType = file.type.toLowerCase();
+  const isHeic = 
+    fileName.endsWith('.heic') || 
+    fileName.endsWith('.heif') ||
+    fileType === 'image/heic' ||
+    fileType === 'image/heif' ||
+    fileType === 'image/heic-sequence' ||
+    fileType === 'image/heif-sequence';
+
+  console.log('convertHeicToJpeg:', {
+    fileName,
+    fileType,
+    isHeic,
+    fileSize: file.size
+  });
+
+  // If not HEIC, return original file unchanged
+  if (!isHeic) {
+    console.log('File is not HEIC, returning original');
+    return file;
+  }
+
+  try {
+    // Ensure we're in a browser environment
+    if (typeof window === 'undefined') {
+      throw new Error('HEIC conversion must run in browser environment');
+    }
+
+    // Dynamically import heic2any (it's a browser-only library)
+    // Use dynamic import for Next.js compatibility
+    const heic2anyModule = await import('heic2any');
+    // heic2any exports as default, but might also have named exports
+    const heic2any = (heic2anyModule.default || heic2anyModule) as any;
+    
+    if (typeof heic2any !== 'function') {
+      console.error('heic2any import issue:', heic2anyModule);
+      throw new Error('Failed to import heic2any library');
+    }
+    
+    console.log('Converting HEIC to JPEG...');
+    console.log('File details:', {
+      name: file.name,
+      type: file.type,
+      size: file.size
+    });
+    
+    // Convert HEIC to JPEG with maximum quality (1.0)
+    // heic2any expects a Blob, File extends Blob so this should work
+    let conversionResult: Blob | Blob[];
+    try {
+      conversionResult = await heic2any({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 1.0, // Maximum quality to preserve image quality
+      });
+    } catch (conversionError) {
+      console.error('heic2any conversion error:', conversionError);
+      throw new Error(`HEIC conversion failed: ${conversionError instanceof Error ? conversionError.message : 'Unknown error'}`);
+    }
+
+    console.log('HEIC conversion result type:', typeof conversionResult, Array.isArray(conversionResult));
+    console.log('HEIC conversion result:', conversionResult);
+    if (Array.isArray(conversionResult)) {
+      console.log('Array length:', conversionResult.length);
+      conversionResult.forEach((blob, i) => {
+        console.log(`Blob ${i}:`, { size: blob.size, type: blob.type });
+      });
+    } else if (conversionResult instanceof Blob) {
+      console.log('Single blob:', { size: conversionResult.size, type: conversionResult.type });
+    }
+
+    // heic2any returns an array of blobs (usually just one) or a single blob
+    let convertedBlob: Blob;
+    if (Array.isArray(conversionResult)) {
+      if (conversionResult.length === 0) {
+        throw new Error('HEIC conversion returned empty array');
+      }
+      convertedBlob = conversionResult[0];
+      // Validate the blob
+      if (!(convertedBlob instanceof Blob)) {
+        throw new Error('HEIC conversion returned array with invalid blob');
+      }
+    } else if (conversionResult instanceof Blob) {
+      convertedBlob = conversionResult;
+    } else {
+      console.error('Unexpected conversion result:', conversionResult);
+      const result = conversionResult as any;
+      console.error('Result constructor:', result?.constructor?.name);
+      console.error('Result keys:', Object.keys(result || {}));
+      throw new Error(`HEIC conversion returned unexpected result type: ${typeof conversionResult}`);
+    }
+
+    console.log('Converted blob details:', {
+      size: convertedBlob.size,
+      type: convertedBlob.type,
+      constructor: convertedBlob.constructor.name,
+      isValid: convertedBlob instanceof Blob
+    });
+
+    // Validate the converted blob is reasonable size (at least 1KB for a real image)
+    if (convertedBlob.size < 1024) {
+      // Try to read the blob to see what's in it
+      const text = await convertedBlob.slice(0, 100).text();
+      console.error('Small blob content (first 100 bytes):', text);
+      throw new Error(`HEIC conversion produced suspiciously small file (${convertedBlob.size} bytes). Expected at least 1KB. Conversion may have failed.`);
+    }
+
+    // Create new filename with .jpg extension
+    const newFileName = fileName
+      .replace(/\.heic$/i, '.jpg')
+      .replace(/\.heif$/i, '.jpg');
+
+    // Convert blob to File object
+    const convertedFile = new File([convertedBlob], newFileName, {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    });
+
+    console.log('HEIC conversion successful:', {
+      originalName: file.name,
+      convertedName: convertedFile.name,
+      originalSize: file.size,
+      convertedSize: convertedFile.size,
+      convertedType: convertedFile.type
+    });
+
+    return convertedFile;
+  } catch (error) {
+    console.error('Failed to convert HEIC to JPEG:', error);
+    // If conversion fails, throw error (don't silently fail)
+    throw new Error(
+      `Failed to convert HEIC image: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
  * Rotate a portrait image to landscape orientation (90° clockwise)
  * If the image is already landscape, returns it unchanged
  * @param file The image file to rotate
@@ -108,9 +253,74 @@ export function rotateToLandscape(file: File): Promise<File> {
     const url = URL.createObjectURL(file);
 
     // Set up error handler first
-    img.onerror = (error) => {
+    img.onerror = async (error) => {
       URL.revokeObjectURL(url);
       console.error('Image load error:', error);
+      console.error('File details:', {
+        name: file.name,
+        type: file.type,
+        size: file.size
+      });
+      
+      // Check if this might be a HEIC file that wasn't detected
+      const fileName = file.name.toLowerCase();
+      const fileType = file.type.toLowerCase();
+      const mightBeHeic = fileName.endsWith('.heic') || fileName.endsWith('.heif') || 
+                         fileType === 'image/heic' || fileType === 'image/heif' ||
+                         fileType === ''; // Sometimes HEIC files have empty type
+      
+      if (mightBeHeic) {
+        console.log('File might be HEIC, attempting conversion...');
+        try {
+          const converted = await convertHeicToJpeg(file);
+          // Retry rotation with converted file
+          const retryUrl = URL.createObjectURL(converted);
+          const retryImg = new Image();
+          retryImg.onload = () => {
+            URL.revokeObjectURL(retryUrl);
+            // Check if image is portrait (height > width)
+            if (retryImg.naturalHeight <= retryImg.naturalWidth) {
+              resolve(converted);
+              return;
+            }
+            // Portrait image - rotate 90° clockwise
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Could not get canvas context'));
+              return;
+            }
+            canvas.width = retryImg.naturalHeight;
+            canvas.height = retryImg.naturalWidth;
+            ctx.translate(canvas.width, 0);
+            ctx.rotate(Math.PI / 2);
+            ctx.drawImage(retryImg, 0, 0);
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  resolve(new File([blob], converted.name, {
+                    type: converted.type || 'image/jpeg',
+                    lastModified: Date.now(),
+                  }));
+                } else {
+                  reject(new Error('Failed to create blob from canvas'));
+                }
+              },
+              converted.type || 'image/jpeg',
+              0.95
+            );
+          };
+          retryImg.onerror = () => {
+            URL.revokeObjectURL(retryUrl);
+            reject(new Error('Failed to load converted image. The file may be corrupted or in an unsupported format.'));
+          };
+          retryImg.src = retryUrl;
+          return;
+        } catch (convertError) {
+          console.error('HEIC conversion also failed:', convertError);
+        }
+      }
+      
       reject(new Error('Failed to load image. The file may be corrupted or in an unsupported format.'));
     };
 

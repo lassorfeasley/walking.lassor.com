@@ -15,9 +15,9 @@ export function useRequireAuth() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
       
-      if (!user) {
+      if (!session) {
         router.push('/signin')
         return
       }
