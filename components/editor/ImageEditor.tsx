@@ -741,6 +741,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         if (!ctx) throw new Error('Could not get canvas context');
 
         const img = imageRef.current;
+        if (!img) throw new Error('Image reference is missing');
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
 
