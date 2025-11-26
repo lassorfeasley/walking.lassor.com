@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { RotateCw, ChevronDown, ChevronUp, Eye, RotateCcw } from 'lucide-react';
-import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, applySelectiveColorsCombined, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
+import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, applySelectiveColorsCombined, applyCssFilters, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
 import { uploadFile, PROCESSED_BUCKET, OPTIMIZED_BUCKET } from '@/lib/supabase/storage';
 import { saveImageMetadata, getImageMetadata, getImageByUrl, getAllTags, savePanels } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
@@ -746,26 +746,45 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         canvas.height = img.naturalHeight;
 
         // Apply filters (same logic as handleExport)
+        // Always apply CSS filters when regenerating, even if no pixel-based filters are active
         const hasHighlightsShadows = filters.highlights !== 0 || filters.shadows !== 0;
         const hasSelectiveColor = Object.values(selectiveColor.adjustments).some(
           (adj) => adj.saturation !== 0 || adj.luminance !== 0
         );
+        const effectiveBrightness = Math.max(0, filters.brightness + filters.exposure);
+        const hasCssFilters = effectiveBrightness !== 100 || filters.contrast !== 100 || filters.saturation !== 100;
+        
+        console.log('=== FILTER APPLICATION DEBUG ===');
+        console.log('hasHighlightsShadows:', hasHighlightsShadows, { highlights: filters.highlights, shadows: filters.shadows });
+        console.log('hasSelectiveColor:', hasSelectiveColor);
+        console.log('hasCssFilters:', hasCssFilters, { brightness: filters.brightness, exposure: filters.exposure, effectiveBrightness, contrast: filters.contrast, saturation: filters.saturation });
+        console.log('Image dimensions:', { width: img.naturalWidth, height: img.naturalHeight });
         
         if (hasHighlightsShadows || hasSelectiveColor) {
+          // Apply pixel-based filters first, then CSS filters
+          console.log('Applying pixel-based filters first, then CSS filters');
           ctx.drawImage(img, 0, 0);
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           
           if (hasHighlightsShadows) {
+            console.log('Applying highlights/shadows:', { highlights: filters.highlights, shadows: filters.shadows });
             applyHighlightsShadows(imageData, filters.highlights, filters.shadows);
           }
           
           if (hasSelectiveColor) {
+            console.log('Applying selective color adjustments');
+            // Use the combined function for better performance
+            const activeSelectiveColors: Array<{ color: string; saturation: number; luminance: number }> = [];
             (['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'] as const).forEach((color) => {
               const adj = selectiveColor.adjustments[color];
               if (adj.saturation !== 0 || adj.luminance !== 0) {
-                applySelectiveColor(imageData, color, adj.saturation, adj.luminance);
+                activeSelectiveColors.push({ color, saturation: adj.saturation, luminance: adj.luminance });
+                console.log(`  - ${color}: saturation=${adj.saturation}, luminance=${adj.luminance}`);
               }
             });
+            if (activeSelectiveColors.length > 0) {
+              applySelectiveColorsCombined(imageData, activeSelectiveColors);
+            }
           }
           
           ctx.putImageData(imageData, 0, 0);
@@ -773,8 +792,12 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           // Convert canvas to blob instead of data URI to avoid CORS issues
           const modifiedBlob = await new Promise<Blob>((resolve, reject) => {
             canvas.toBlob((blob) => {
-              if (blob) resolve(blob);
-              else reject(new Error('Failed to create blob'));
+              if (blob) {
+                console.log('Modified blob created:', { size: blob.size, type: blob.type });
+                resolve(blob);
+              } else {
+                reject(new Error('Failed to create blob from modified image'));
+              }
             }, 'image/png');
           });
           
@@ -784,7 +807,10 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           modifiedImg.src = modifiedImgUrl;
           
           await new Promise((resolve, reject) => {
-            modifiedImg.onload = () => resolve(undefined);
+            modifiedImg.onload = () => {
+              console.log('Modified image loaded:', { width: modifiedImg.naturalWidth, height: modifiedImg.naturalHeight });
+              resolve(undefined);
+            };
             modifiedImg.onerror = () => {
               URL.revokeObjectURL(modifiedImgUrl);
               reject(new Error('Failed to load modified image'));
@@ -792,44 +818,91 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           });
           
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          const effectiveBrightness = Math.max(0, filters.brightness + filters.exposure);
-          ctx.filter = [
-            `brightness(${effectiveBrightness}%)`,
-            `contrast(${filters.contrast}%)`,
-            `saturate(${filters.saturation}%)`,
-          ].join(' ');
-          ctx.drawImage(modifiedImg, 0, 0);
+          // Apply CSS filters to the modified image (Safari-compatible via pixel manipulation)
+          if (hasCssFilters) {
+            console.log('Applying CSS filters to modified image (Safari-compatible):', { brightness: effectiveBrightness, contrast: filters.contrast, saturation: filters.saturation });
+            // Draw the image first
+            ctx.drawImage(modifiedImg, 0, 0);
+            // Get ImageData and apply filters manually
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            applyCssFilters(imageData, effectiveBrightness, filters.contrast, filters.saturation);
+            ctx.putImageData(imageData, 0, 0);
+          } else {
+            // No CSS filters, just draw
+            ctx.drawImage(modifiedImg, 0, 0);
+          }
           
           // Revoke URL after image is drawn
           URL.revokeObjectURL(modifiedImgUrl);
+        } else if (hasCssFilters) {
+          // Only CSS filters, apply directly (Safari-compatible via pixel manipulation)
+          console.log('Applying CSS filters only (Safari-compatible):', { brightness: effectiveBrightness, contrast: filters.contrast, saturation: filters.saturation });
+          // Draw the image first
+          ctx.drawImage(img, 0, 0);
+          // Get ImageData and apply filters manually
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          applyCssFilters(imageData, effectiveBrightness, filters.contrast, filters.saturation);
+          ctx.putImageData(imageData, 0, 0);
         } else {
-          const effectiveBrightness = Math.max(0, filters.brightness + filters.exposure);
-          ctx.filter = [
-            `brightness(${effectiveBrightness}%)`,
-            `contrast(${filters.contrast}%)`,
-            `saturate(${filters.saturation}%)`,
-          ].join(' ');
+          // No filters at all, just draw the image (shouldn't happen if shouldRegenerate is true, but handle it anyway)
+          console.warn('No filters to apply, but shouldRegenerate is true. Drawing image without filters.');
           ctx.drawImage(img, 0, 0);
         }
 
         // Convert canvas to blob instead of data URI to avoid CORS issues
+        console.log('Converting filtered canvas to blob...');
         const filteredBlob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob((blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Failed to create blob'));
+            if (blob) {
+              console.log('Filtered blob created successfully:', { 
+                size: blob.size, 
+                type: blob.type,
+                sizeMB: (blob.size / 1024 / 1024).toFixed(2)
+              });
+              // Validate blob size is reasonable (at least 1KB for a real image)
+              if (blob.size < 1024) {
+                console.error('Filtered blob is suspiciously small:', blob.size);
+                reject(new Error('Filtered image blob is too small. Filter application may have failed.'));
+                return;
+              }
+              resolve(blob);
+            } else {
+              console.error('Failed to create blob from filtered canvas');
+              reject(new Error('Failed to create blob from filtered canvas. Filter application may have failed.'));
+            }
           }, 'image/png');
         });
+        
+        // Validate filtered blob was created
+        if (!filteredBlob || filteredBlob.size === 0) {
+          throw new Error('Filtered blob is invalid or empty');
+        }
         
         const filteredImg = new Image();
         filteredImg.crossOrigin = 'anonymous';
         const filteredImgUrl = URL.createObjectURL(filteredBlob);
         filteredImg.src = filteredImgUrl;
 
+        console.log('Loading filtered image for cropping...');
         await new Promise((resolve, reject) => {
-          filteredImg.onload = () => resolve(undefined);
-          filteredImg.onerror = () => {
+          filteredImg.onload = () => {
+            console.log('Filtered image loaded successfully:', { 
+              width: filteredImg.naturalWidth, 
+              height: filteredImg.naturalHeight 
+            });
+            // Validate image dimensions match canvas
+            if (filteredImg.naturalWidth !== canvas.width || filteredImg.naturalHeight !== canvas.height) {
+              console.warn('Filtered image dimensions mismatch:', {
+                canvas: { width: canvas.width, height: canvas.height },
+                image: { width: filteredImg.naturalWidth, height: filteredImg.naturalHeight }
+              });
+            }
+            resolve(undefined);
+          };
+          filteredImg.onerror = (error) => {
+            console.error('Failed to load filtered image:', error);
             URL.revokeObjectURL(filteredImgUrl);
-            reject(new Error('Failed to load filtered image'));
+            reject(new Error('Failed to load filtered image. The filtered image may be corrupted.'));
           };
         });
 
@@ -902,9 +975,16 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         // Use PNG for truly lossless quality (for archival and print quality)
         // Note: croppedAreaPixels coordinates are relative to original image dimensions
         // since we always use imageUrl in the Cropper component
+        console.log('Cropping filtered image with final crop area:', finalCropArea);
         let croppedBlob = await cropImage(filteredImg, finalCropArea, undefined, 'png');
         let fileExtension = 'png';
         let mimeType = 'image/png';
+        
+        console.log('Cropped blob created:', { 
+          size: croppedBlob.size, 
+          sizeMB: (croppedBlob.size / 1024 / 1024).toFixed(2),
+          type: mimeType
+        });
 
         // Check if PNG is too large (over 45MB, leaving 5MB buffer for safety)
         // Supabase free tier limit is 50MB. PNGs for panoramas can easily exceed this.

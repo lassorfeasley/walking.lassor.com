@@ -702,6 +702,57 @@ export function applySelectiveColorsCombined(
 }
 
 /**
+ * Apply CSS filters (brightness, contrast, saturation) to image data via pixel manipulation
+ * This is Safari-compatible and works consistently across all browsers
+ * @param imageData ImageData from canvas context
+ * @param brightness Brightness percentage (0-200, default 100)
+ * @param contrast Contrast percentage (0-200, default 100)
+ * @param saturation Saturation percentage (0-200, default 100)
+ */
+export function applyCssFilters(
+  imageData: ImageData,
+  brightness: number,
+  contrast: number,
+  saturation: number
+): void {
+  const data = imageData.data;
+  
+  // Convert percentages to multipliers
+  const brightnessMultiplier = brightness / 100;
+  const contrastMultiplier = contrast / 100;
+  const saturationMultiplier = saturation / 100;
+  
+  // Apply filters to each pixel
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i];
+    let g = data[i + 1];
+    let b = data[i + 2];
+    
+    // Apply brightness (multiply all channels)
+    r = r * brightnessMultiplier;
+    g = g * brightnessMultiplier;
+    b = b * brightnessMultiplier;
+    
+    // Apply contrast (centers adjustment around 128)
+    r = ((r - 128) * contrastMultiplier) + 128;
+    g = ((g - 128) * contrastMultiplier) + 128;
+    b = ((b - 128) * contrastMultiplier) + 128;
+    
+    // Apply saturation (blend with grayscale)
+    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = gray + (r - gray) * saturationMultiplier;
+    g = gray + (g - gray) * saturationMultiplier;
+    b = gray + (b - gray) * saturationMultiplier;
+    
+    // Clamp values to valid range
+    data[i] = Math.max(0, Math.min(255, Math.round(r)));
+    data[i + 1] = Math.max(0, Math.min(255, Math.round(g)));
+    data[i + 2] = Math.max(0, Math.min(255, Math.round(b)));
+    // Alpha channel (data[i + 3]) remains unchanged
+  }
+}
+
+/**
  * Generate web-optimized version of an image
  * @param image The image element
  * @param maxWidth Maximum width in pixels
