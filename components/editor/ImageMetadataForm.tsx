@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import type { KeyboardEvent } from 'react';
 import dynamic from 'next/dynamic';
-import { format } from 'date-fns';
 import { PanoramaImage } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { COUNTRIES } from '@/lib/countries';
 
 // Dynamically import SearchBox to avoid SSR issues
@@ -27,15 +28,15 @@ interface ImageMetadataFormProps {
   existingTags: string[];
 }
 
+const normalizeTag = (tag: string) => tag.trim().toLowerCase();
+
 export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMetadataFormProps) {
   const [locationInput, setLocationInput] = useState(metadata.location_name || '');
-  const [tagInput, setTagInput] = useState((metadata.tags || []).join(', '));
-  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [tagSearch, setTagSearch] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('US');
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
   const countryDropdownRef = useRef<HTMLDivElement>(null);
 
   // Prefill with test data on mount
@@ -53,28 +54,8 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
         status: 'draft',
       });
       setLocationInput('San Francisco, CA');
-      setTagInput('urban, city, walking');
     }
   }, []);
-
-  // Update tag suggestions based on input
-  useEffect(() => {
-    if (tagInput.trim()) {
-      const inputTags = tagInput.split(',').map(t => t.trim().toLowerCase());
-      const lastTag = inputTags[inputTags.length - 1];
-      if (lastTag) {
-        const suggestions = existingTags
-          .filter(tag => tag.toLowerCase().startsWith(lastTag.toLowerCase()))
-          .filter(tag => !inputTags.includes(tag.toLowerCase()))
-          .slice(0, 5);
-        setTagSuggestions(suggestions);
-      } else {
-        setTagSuggestions([]);
-      }
-    } else {
-      setTagSuggestions([]);
-    }
-  }, [tagInput, existingTags]);
 
   // Check if Mapbox token is available on mount
   useEffect(() => {
@@ -92,13 +73,6 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
     }
   }, [metadata.location_name]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync tagInput when metadata.tags changes externally
-  useEffect(() => {
-    const tagsString = (metadata.tags || []).join(', ');
-    if (tagsString !== tagInput) {
-      setTagInput(tagsString);
-    }
-  }, [metadata.tags]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update map preview when coordinates change
   useEffect(() => {
@@ -252,25 +226,69 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
     });
   };
 
-  const handleTagChange = (value: string) => {
-    setTagInput(value);
-    const tags = value
-      .split(',')
-      .map(t => t.trim())
-      .filter(t => t.length > 0);
+  const selectedTags = metadata.tags || [];
+  const normalizedSelectedTags = useMemo(() => new Set(selectedTags.map(normalizeTag)), [selectedTags]);
+
+  const normalizedSearch = normalizeTag(tagSearch);
+
+  const filteredTagOptions = useMemo(() => {
+    return existingTags
+      .filter((tag) => {
+        const normalized = normalizeTag(tag);
+        if (normalizedSelectedTags.has(normalized)) {
+          return false;
+        }
+        if (!normalizedSearch) {
+          return true;
+        }
+        return normalized.includes(normalizedSearch);
+      })
+      .slice(0, 20);
+  }, [existingTags, normalizedSearch, normalizedSelectedTags]);
+
+  const canCreateNewTag =
+    normalizedSearch.length > 0 &&
+    !normalizedSelectedTags.has(normalizedSearch) &&
+    !existingTags.some((tag) => normalizeTag(tag) === normalizedSearch);
+
+  const addTag = (tagName: string) => {
+    const cleaned = tagName.trim();
+    if (!cleaned) return;
+    const normalized = normalizeTag(cleaned);
+    if (normalizedSelectedTags.has(normalized)) return;
+
+    const canonicalTag =
+      existingTags.find((tag) => normalizeTag(tag) === normalized) || cleaned.toLowerCase();
+
     onChange({
       ...metadata,
-      tags,
+      tags: [...selectedTags, canonicalTag],
+    });
+    setTagSearch('');
+  };
+
+  const removeTag = (tagName: string) => {
+    const normalized = normalizeTag(tagName);
+    onChange({
+      ...metadata,
+      tags: selectedTags.filter((tag) => normalizeTag(tag) !== normalized),
     });
   };
 
-  const handleTagSuggestionClick = (suggestion: string) => {
-    const currentTags = tagInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    const lastTagIndex = tagInput.lastIndexOf(',');
-    const beforeLastTag = lastTagIndex >= 0 ? tagInput.substring(0, lastTagIndex + 1) : '';
-    const newTagInput = beforeLastTag + (beforeLastTag ? ' ' : '') + suggestion;
-    handleTagChange(newTagInput);
-    setTagSuggestions([]);
+  const handleTagInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (filteredTagOptions.length > 0) {
+        addTag(filteredTagOptions[0]);
+      } else if (canCreateNewTag) {
+        addTag(tagSearch);
+      }
+    } else if (event.key === 'Backspace' && !tagSearch) {
+      const lastTag = selectedTags[selectedTags.length - 1];
+      if (lastTag) {
+        removeTag(lastTag);
+      }
+    }
   };
 
   // Filter countries based on search
@@ -283,11 +301,11 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
       .trim();
   };
 
-  const normalizedSearch = normalizeSearch(countrySearch);
+  const normalizedCountrySearch = normalizeSearch(countrySearch);
   
   const filteredCountries = COUNTRIES.filter(country => {
     const normalizedName = country.name.toLowerCase();
-    return normalizedName.includes(normalizedSearch) ||
+    return normalizedName.includes(normalizedCountrySearch) ||
            country.code.toLowerCase().includes(countrySearch.toLowerCase());
   });
 
@@ -472,34 +490,72 @@ export function ImageMetadataForm({ metadata, onChange, existingTags }: ImageMet
         </div>
 
         {/* Tags Section */}
-        <div className="space-y-2">
-          <Label htmlFor="tags">Tags (comma-separated) *</Label>
-          <div className="relative">
-            <Input
-              id="tags"
-              type="text"
-              placeholder="urban, city, walking..."
-              value={tagInput}
-              onChange={(e) => handleTagChange(e.target.value)}
-              required
-            />
-            {tagSuggestions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg">
-                {tagSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => handleTagSuggestionClick(suggestion)}
-                    className="w-full text-left px-3 py-2 hover:bg-accent hover:text-accent-foreground text-sm"
+        <div className="space-y-3">
+          <Label htmlFor="tags">Tags *</Label>
+          <Input
+            id="tags"
+            type="text"
+            placeholder="Search or create a tag..."
+            value={tagSearch}
+            onChange={(e) => setTagSearch(e.target.value)}
+            onKeyDown={handleTagInputKeyDown}
+            aria-required="true"
+          />
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground">Selected tags</div>
+            {selectedTags.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Select at least one tag.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {selectedTags.map((tag) => (
+                  <Badge
+                    key={tag}
+                    variant="secondary"
+                    className="flex items-center gap-1 cursor-pointer"
+                    onClick={() => removeTag(tag)}
+                    aria-label={`Remove tag ${tag}`}
                   >
-                    {suggestion}
-                  </button>
+                    {tag}
+                    <span className="text-muted-foreground text-[10px]">×</span>
+                  </Badge>
                 ))}
               </div>
             )}
+            <div className="text-xs text-muted-foreground">
+              {selectedTags.length} tag(s) selected
+            </div>
           </div>
-          <div className="text-xs text-muted-foreground">
-            {metadata.tags?.length || 0} tag(s) added
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Suggestions</span>
+              <span>Showing {filteredTagOptions.length} of {existingTags.length}</span>
+            </div>
+            <div className="flex flex-wrap gap-2 border rounded-md p-3">
+              {canCreateNewTag && (
+                <Badge
+                  variant="success"
+                  className="cursor-pointer"
+                  onClick={() => addTag(tagSearch)}
+                >
+                  + Create &quot;{tagSearch.trim()}&quot;
+                </Badge>
+              )}
+              {filteredTagOptions.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="outline"
+                  className="cursor-pointer hover:bg-accent"
+                  onClick={() => addTag(tag)}
+                >
+                  {tag}
+                </Badge>
+              ))}
+              {!canCreateNewTag && filteredTagOptions.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No tags match your search. Try creating a new one.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
