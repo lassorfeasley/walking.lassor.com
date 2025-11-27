@@ -1,21 +1,4 @@
-import { Suspense } from 'react';
-import SearchPageClient from './SearchPageClient';
-
-function SearchPageFallback() {
-  return (
-    <div className="w-full min-h-screen flex items-center justify-center text-neutral-500 text-xs font-[var(--font-inconsolata)]">
-      Loading search…
-    </div>
-  );
-}
-
-export default function SearchPage() {
-  return (
-    <Suspense fallback={<SearchPageFallback />}>
-      <SearchPageClient />
-    </Suspense>
-  );
-}
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -75,7 +58,7 @@ function formatLocationForDisplay(locationName: string): string {
   return locationName;
 }
 
-function SearchPageContent() {
+function SearchPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const query = searchParams.get('q') ?? '';
@@ -332,7 +315,5 @@ function SearchPageContent() {
   );
 }
 
-export default function SearchPage() {
-  return <SearchPageContent />;
-}
+export default SearchPageClient;
 
