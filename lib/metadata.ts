@@ -45,8 +45,7 @@ async function fetchPanoramaFromApi(id?: string): Promise<PanoramaApiResponse | 
     url.searchParams.set('includePanels', '1');
 
     const response = await fetch(url.toString(), {
-      cache: 'no-store',
-      next: { revalidate: 0 },
+      next: { revalidate: 3600 },
     });
 
     if (!response.ok) {
@@ -117,8 +116,7 @@ async function fetchLatestPanoramaFromApi(): Promise<PanoramaApiResponse | null>
     url.searchParams.set('includePanels', '1');
 
     const response = await fetch(url.toString(), {
-      cache: 'no-store',
-      next: { revalidate: 0 },
+      next: { revalidate: 3600 },
     });
 
     if (!response.ok) {
