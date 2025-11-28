@@ -2205,10 +2205,10 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
 
             {/* Action Buttons */}
             <div className="pt-5 border-t border-border space-y-2">
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <Button
                   variant="outline"
-                  className="flex-1"
+                  className="w-full"
                   onMouseDown={() => setShowOriginal(true)}
                   onMouseUp={() => setShowOriginal(false)}
                   onMouseLeave={() => setShowOriginal(false)}
@@ -2218,38 +2218,49 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                   <Eye className="h-4 w-4 mr-2" />
                   View Original
                 </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setCrop({ x: 0, y: 0 });
-                    setZoom(1);
-                    setRotation(0);
-                    setFilters({
-                      brightness: 100,
-                      contrast: 100,
-                      saturation: 100,
-                      exposure: 0,
-                      highlights: 0,
-                      shadows: 0,
-                    });
-                    setSelectiveColor({
-                      selectedColor: 'red',
-                      adjustments: {
-                        red: { saturation: 0, luminance: 0 },
-                        yellow: { saturation: 0, luminance: 0 },
-                        green: { saturation: 0, luminance: 0 },
-                        cyan: { saturation: 0, luminance: 0 },
-                        blue: { saturation: 0, luminance: 0 },
-                        magenta: { saturation: 0, luminance: 0 },
-                      },
-                    });
-                    zoomRef.current = 1;
-                  }}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reset All
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setFilters({
+                        brightness: 100,
+                        contrast: 100,
+                        saturation: 100,
+                        exposure: 0,
+                        highlights: 0,
+                        shadows: 0,
+                      });
+                      setSelectiveColor({
+                        selectedColor: 'red',
+                        adjustments: {
+                          red: { saturation: 0, luminance: 0 },
+                          yellow: { saturation: 0, luminance: 0 },
+                          green: { saturation: 0, luminance: 0 },
+                          cyan: { saturation: 0, luminance: 0 },
+                          blue: { saturation: 0, luminance: 0 },
+                          magenta: { saturation: 0, luminance: 0 },
+                        },
+                      });
+                    }}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reset Color Adjustments
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setCrop({ x: 0, y: 0 });
+                      setZoom(1);
+                      setRotation(0);
+                      zoomRef.current = 1;
+                    }}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reset Crop & Rotation
+                  </Button>
+                </div>
               </div>
             </div>
 
