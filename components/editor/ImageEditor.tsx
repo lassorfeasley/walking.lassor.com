@@ -21,6 +21,9 @@ interface ImageEditorProps {
   onSave?: (recordId: string) => void;
 }
 
+const clampValue = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
 export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -1836,7 +1839,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
               </label>
               <div className="flex items-center gap-3">
                 <Slider
-                  value={[filters.brightness]}
+                  value={[clampValue(filters.brightness, 0, 200)]}
                   onValueChange={(value) =>
                     setFilters((prev) => ({ ...prev, brightness: value[0] }))
                   }
@@ -1848,13 +1851,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <Input
                     type="number"
-                    min={0}
-                    max={200}
                     step={1}
-                    value={Math.round(filters.brightness)}
+                    value={filters.brightness}
                     onChange={(e) => {
-                      const value = parseInt(e.target.value, 10);
-                      if (!isNaN(value) && value >= 0 && value <= 200) {
+                      const value = Number(e.target.value);
+                      if (!Number.isNaN(value)) {
                         setFilters((prev) => ({ ...prev, brightness: value }));
                       }
                     }}
@@ -1871,7 +1872,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
               </label>
               <div className="flex items-center gap-3">
                 <Slider
-                  value={[filters.contrast]}
+                  value={[clampValue(filters.contrast, 0, 200)]}
                   onValueChange={(value) =>
                     setFilters((prev) => ({ ...prev, contrast: value[0] }))
                   }
@@ -1883,13 +1884,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <Input
                     type="number"
-                    min={0}
-                    max={200}
                     step={1}
-                    value={Math.round(filters.contrast)}
+                    value={filters.contrast}
                     onChange={(e) => {
-                      const value = parseInt(e.target.value, 10);
-                      if (!isNaN(value) && value >= 0 && value <= 200) {
+                      const value = Number(e.target.value);
+                      if (!Number.isNaN(value)) {
                         setFilters((prev) => ({ ...prev, contrast: value }));
                       }
                     }}
@@ -1906,7 +1905,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
               </label>
               <div className="flex items-center gap-3">
                 <Slider
-                  value={[filters.saturation]}
+                  value={[clampValue(filters.saturation, 0, 200)]}
                   onValueChange={(value) =>
                     setFilters((prev) => ({ ...prev, saturation: value[0] }))
                   }
@@ -1918,13 +1917,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <Input
                     type="number"
-                    min={0}
-                    max={200}
                     step={1}
-                    value={Math.round(filters.saturation)}
+                    value={filters.saturation}
                     onChange={(e) => {
-                      const value = parseInt(e.target.value, 10);
-                      if (!isNaN(value) && value >= 0 && value <= 200) {
+                      const value = Number(e.target.value);
+                      if (!Number.isNaN(value)) {
                         setFilters((prev) => ({ ...prev, saturation: value }));
                       }
                     }}
@@ -1941,7 +1938,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
               </label>
               <div className="flex items-center gap-3">
                 <Slider
-                  value={[filters.exposure]}
+                  value={[clampValue(filters.exposure, -20, 20)]}
                   onValueChange={(value) =>
                     setFilters((prev) => ({ ...prev, exposure: value[0] }))
                   }
@@ -1953,13 +1950,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <Input
                     type="number"
-                    min={-20}
-                    max={20}
                     step={0.1}
                     value={filters.exposure.toFixed(1)}
                     onChange={(e) => {
                       const value = parseFloat(e.target.value);
-                      if (!isNaN(value) && value >= -20 && value <= 20) {
+                      if (!isNaN(value)) {
                         setFilters((prev) => ({ ...prev, exposure: value }));
                       }
                     }}
@@ -1975,7 +1970,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
               </label>
               <div className="flex items-center gap-3">
                 <Slider
-                  value={[filters.highlights]}
+                  value={[clampValue(filters.highlights, -20, 20)]}
                   onValueChange={(value) =>
                     setFilters((prev) => ({ ...prev, highlights: value[0] }))
                   }
@@ -1987,13 +1982,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <Input
                     type="number"
-                    min={-20}
-                    max={20}
                     step={0.1}
                     value={filters.highlights.toFixed(1)}
                     onChange={(e) => {
                       const value = parseFloat(e.target.value);
-                      if (!isNaN(value) && value >= -20 && value <= 20) {
+                      if (!isNaN(value)) {
                         setFilters((prev) => ({ ...prev, highlights: value }));
                       }
                     }}
@@ -2009,7 +2002,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
               </label>
               <div className="flex items-center gap-3">
                 <Slider
-                  value={[filters.shadows]}
+                  value={[clampValue(filters.shadows, -20, 20)]}
                   onValueChange={(value) =>
                     setFilters((prev) => ({ ...prev, shadows: value[0] }))
                   }
@@ -2021,13 +2014,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <Input
                     type="number"
-                    min={-20}
-                    max={20}
                     step={0.1}
                     value={filters.shadows.toFixed(1)}
                     onChange={(e) => {
                       const value = parseFloat(e.target.value);
-                      if (!isNaN(value) && value >= -20 && value <= 20) {
+                      if (!isNaN(value)) {
                         setFilters((prev) => ({ ...prev, shadows: value }));
                       }
                     }}
@@ -2100,7 +2091,13 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                         </label>
                         <div className="flex items-center gap-3">
                           <Slider
-                            value={[selectiveColor.adjustments[selectiveColor.selectedColor].saturation]}
+                            value={[
+                              clampValue(
+                                selectiveColor.adjustments[selectiveColor.selectedColor].saturation,
+                                -10,
+                                10
+                              ),
+                            ]}
                             onValueChange={(value) =>
                               setSelectiveColor((prev) => ({
                                 ...prev,
@@ -2121,13 +2118,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <Input
                               type="number"
-                              min={-10}
-                              max={10}
                               step={0.1}
                               value={selectiveColor.adjustments[selectiveColor.selectedColor].saturation.toFixed(1)}
                               onChange={(e) => {
                                 const value = parseFloat(e.target.value);
-                                if (!isNaN(value) && value >= -10 && value <= 10) {
+                                if (!isNaN(value)) {
                                   setSelectiveColor((prev) => ({
                                     ...prev,
                                     adjustments: {
@@ -2153,7 +2148,13 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                         </label>
                         <div className="flex items-center gap-3">
                           <Slider
-                            value={[selectiveColor.adjustments[selectiveColor.selectedColor].luminance]}
+                            value={[
+                              clampValue(
+                                selectiveColor.adjustments[selectiveColor.selectedColor].luminance,
+                                -10,
+                                10
+                              ),
+                            ]}
                             onValueChange={(value) =>
                               setSelectiveColor((prev) => ({
                                 ...prev,
@@ -2174,13 +2175,11 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <Input
                               type="number"
-                              min={-10}
-                              max={10}
                               step={0.1}
                               value={selectiveColor.adjustments[selectiveColor.selectedColor].luminance.toFixed(1)}
                               onChange={(e) => {
                                 const value = parseFloat(e.target.value);
-                                if (!isNaN(value) && value >= -10 && value <= 10) {
+                                if (!isNaN(value)) {
                                   setSelectiveColor((prev) => ({
                                     ...prev,
                                     adjustments: {
