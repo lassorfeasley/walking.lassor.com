@@ -101,6 +101,57 @@ export async function getAllImages(): Promise<PanoramaImage[]> {
   return imagesWithTags;
 }
 
+interface GetImagesPageParams {
+  limit?: number;
+  offset?: number;
+}
+
+interface ImagesPageResult {
+  images: PanoramaImage[];
+  hasMore: boolean;
+}
+
+export async function getImagesPage({
+  limit = 24,
+  offset = 0,
+}: GetImagesPageParams = {}): Promise<ImagesPageResult> {
+  const supabase = createClient()
+  const rangeStart = Math.max(0, offset);
+  const rangeEnd = rangeStart + Math.max(1, limit) - 1;
+
+  const { data, error } = await supabase
+    .from('panorama_images')
+    .select('*')
+    .order('date_taken', { ascending: false })
+    .order('id', { ascending: false })
+    .range(rangeStart, rangeEnd);
+
+  if (error) {
+    console.error('Error fetching paginated images:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    return { images: [], hasMore: false };
+  }
+
+  if (!data || data.length === 0) {
+    return { images: [], hasMore: false };
+  }
+
+  const imagesWithTags = await Promise.all(
+    data.map(async (image) => {
+      const tagNames = await getImageTagNames(image.id);
+      return {
+        ...image,
+        tags: tagNames,
+      } as PanoramaImage;
+    })
+  );
+
+  return {
+    images: imagesWithTags,
+    hasMore: imagesWithTags.length === Math.max(1, limit),
+  };
+}
+
 /**
  * Save or update image metadata
  */

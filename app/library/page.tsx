@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, Trash2, Instagram, Info } from 'lucide-react';
 import Link from 'next/link';
-import { getAllImages, deleteImage } from '@/lib/supabase/database';
+import { getImagesPage, deleteImage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 import { useRequireAuth } from '@/lib/auth-client';
 
@@ -17,6 +17,7 @@ const BLOCK_HEIGHT = PANEL_HEIGHT * PANEL_BLOCK_RATIO;
 const IMAGE_STRIP_HEIGHT = PANEL_HEIGHT - BLOCK_HEIGHT * 2;
 const THREE_PANEL_ASPECT_RATIO = (3 * PANEL_HEIGHT) / IMAGE_STRIP_HEIGHT; // Matches processed preview exports
 const THREE_PANEL_PADDING_PERCENT = `${(100 / THREE_PANEL_ASPECT_RATIO).toFixed(6)}%`;
+const PAGE_SIZE = 24;
 
 /**
  * Format location for display:
@@ -60,12 +61,16 @@ export default function LibraryPage() {
   const router = useRouter();
   const { isLoading: isAuthLoading } = useRequireAuth();
   const [images, setImages] = useState<PanoramaImage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [postingId, setPostingId] = useState<string | null>(null);
   const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null)
   const [tokenWarning, setTokenWarning] = useState<string | null>(null)
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const nextOffsetRef = useRef(0);
   const handlePostToInstagram = async (
     image: PanoramaImage,
     event?: React.MouseEvent
@@ -156,25 +161,62 @@ export default function LibraryPage() {
   }, [])
 
   // All hooks must be called before any conditional returns
+  const loadMoreImages = useCallback(async () => {
+    if (isFetchingMore || !hasMore || isAuthLoading) return;
+    setIsFetchingMore(true);
+    try {
+      const currentOffset = nextOffsetRef.current;
+      const { images: newImages, hasMore: pageHasMore } = await getImagesPage({
+        limit: PAGE_SIZE,
+        offset: currentOffset,
+      });
+
+      nextOffsetRef.current = currentOffset + newImages.length;
+      setImages((prev) => {
+        const existingIds = new Set(prev.map((img) => img.id));
+        const uniqueNewImages = newImages.filter((img) => !existingIds.has(img.id));
+        if (uniqueNewImages.length === 0) {
+          return prev;
+        }
+        return [...prev, ...uniqueNewImages];
+      });
+      setHasMore(pageHasMore);
+      setError(null);
+    } catch (err) {
+      console.error('Error loading images:', err);
+      setError('Failed to load images');
+    } finally {
+      setIsInitialLoad(false);
+      setIsFetchingMore(false);
+    }
+  }, [hasMore, isAuthLoading, isFetchingMore]);
+
   useEffect(() => {
-    // Only load images if auth check is complete
     if (isAuthLoading) return;
-
-    const loadImages = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getAllImages();
-        setImages(data);
-      } catch (err) {
-        console.error('Error loading images:', err);
-        setError('Failed to load images');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadImages();
+    loadMoreImages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthLoading]);
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMoreImages();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isAuthLoading, loadMoreImages]);
 
   const handleDelete = async (imageId: string, imageTitle: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent navigation to detail page
@@ -190,7 +232,7 @@ export default function LibraryPage() {
       const success = await deleteImage(imageId);
       if (success) {
         // Remove from local state
-        setImages(images.filter(img => img.id !== imageId));
+        setImages((prev) => prev.filter((img) => img.id !== imageId));
       } else {
         alert('Failed to delete panorama. Please try again.');
       }
@@ -255,7 +297,7 @@ export default function LibraryPage() {
         </div>
       ) : null}
 
-      {isLoading ? (
+      {isInitialLoad ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Loading panoramas...</p>
         </div>
@@ -339,6 +381,12 @@ export default function LibraryPage() {
           ))}
         </div>
       )}
+      <div className="flex flex-col items-center justify-center gap-2 py-6">
+        {isFetchingMore && !isInitialLoad ? (
+          <p className="text-muted-foreground text-sm">Loading more panoramas...</p>
+        ) : null}
+        <div ref={sentinelRef} className="h-1 w-full" />
+      </div>
     </div>
   );
 }

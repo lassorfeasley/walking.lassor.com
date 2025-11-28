@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getAllImages } from '@/lib/supabase/database';
+import { getImagesPage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 import { format } from 'date-fns';
 import { SearchDialog } from '@/components/SearchDialog';
@@ -15,6 +15,7 @@ const IMAGE_STRIP_HEIGHT = PANEL_HEIGHT - BLOCK_HEIGHT * 2;
 const THREE_PANEL_ASPECT_RATIO = (3 * PANEL_HEIGHT) / IMAGE_STRIP_HEIGHT; // Actual processed pano ratio
 const THREE_PANEL_PADDING_PERCENT = `${(100 / THREE_PANEL_ASPECT_RATIO).toFixed(6)}%`;
 const THREE_PANEL_TOLERANCE = 0.05; // Allow small variances when inferring panel count from aspect ratio
+const PAGE_SIZE = 24;
 
 // Utility function to convert decimal degrees to DMS format
 function toDMS(decimal: number, isLatitude: boolean): string {
@@ -65,27 +66,69 @@ function formatLocationForDisplay(locationName: string): string {
 export default function Home() {
   const router = useRouter();
   const [images, setImages] = useState<PanoramaImage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clipMaskOverrides, setClipMaskOverrides] = useState<Record<string, boolean>>({});
   const measuredImagesRef = useRef<Set<string>>(new Set());
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const nextOffsetRef = useRef(0);
+
+  const loadMoreImages = useCallback(async () => {
+    if (isFetchingMore || !hasMore) return;
+    setIsFetchingMore(true);
+    try {
+      const currentOffset = nextOffsetRef.current;
+      const { images: newImages, hasMore: pageHasMore } = await getImagesPage({
+        limit: PAGE_SIZE,
+        offset: currentOffset,
+      });
+
+      nextOffsetRef.current = currentOffset + newImages.length;
+      setImages((prev) => {
+        const existingIds = new Set(prev.map((img) => img.id));
+        const uniqueNewImages = newImages.filter((img) => !existingIds.has(img.id));
+        if (uniqueNewImages.length === 0) {
+          return prev;
+        }
+        return [...prev, ...uniqueNewImages];
+      });
+      setHasMore(pageHasMore);
+      setError(null);
+    } catch (err) {
+      console.error('Error loading images:', err);
+      setError('Failed to load images');
+    } finally {
+      setIsInitialLoad(false);
+      setIsFetchingMore(false);
+    }
+  }, [hasMore, isFetchingMore]);
 
   useEffect(() => {
-    const loadImages = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getAllImages();
-        setImages(data);
-      } catch (err) {
-        console.error('Error loading images:', err);
-        setError('Failed to load images');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadImages();
+    loadMoreImages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMoreImages();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [loadMoreImages]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -193,7 +236,7 @@ export default function Home() {
 
             {/* Panorama Grid */}
             <div className="self-stretch flex flex-col justify-start items-start">
-              {isLoading ? (
+              {isInitialLoad ? (
                 <div className="w-full flex justify-center items-center py-12">
                   <p className="text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)]">Loading panoramas...</p>
                 </div>
@@ -290,6 +333,14 @@ export default function Home() {
                   })}
                 </div>
               )}
+            </div>
+            <div className="w-full flex flex-col items-center justify-center gap-2 py-6">
+              {isFetchingMore && !isInitialLoad ? (
+                <p className="text-neutral-500 text-xs font-medium font-[var(--font-inconsolata)]">
+                  Loading more panoramas...
+                </p>
+              ) : null}
+              <div ref={sentinelRef} className="h-1 w-full" />
             </div>
           </div>
         </div>
