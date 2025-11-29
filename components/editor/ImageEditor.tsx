@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { RotateCw, ChevronDown, ChevronUp, Eye, RotateCcw } from 'lucide-react';
-import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, applySelectiveColorsCombined, applyCssFilters, generatePanelImages, generateWebOptimized } from '@/lib/image-processing/utils';
+import { cropImage, getPanelDimensions, addWhiteBlocks, applyHighlightsShadows, applySelectiveColor, applySelectiveColorsCombined, applyCssFilters, generatePanelImages, generateWebOptimized, rotateImageWithCanvas } from '@/lib/image-processing/utils';
 import { uploadFile, PROCESSED_BUCKET, OPTIMIZED_BUCKET } from '@/lib/supabase/storage';
 import { saveImageMetadata, getImageMetadata, getImageByUrl, getAllTags, savePanels } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
@@ -942,44 +942,89 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           rightCrop: filteredImg.naturalWidth - (croppedAreaPixels.x + croppedAreaPixels.width),
         });
 
-        // Calculate crop pixels from relative percentages if available
-        // This handles the case where the preview image (used for cropping UI) 
-        // has different dimensions than the full resolution image being processed.
-        let cropPixelsForProcessing = croppedAreaPixels;
-        
-        if (croppedAreaRelative && filteredImg.naturalWidth && filteredImg.naturalHeight) {
-             console.log('Recalculating crop pixels from relative percentages:', croppedAreaRelative);
-             cropPixelsForProcessing = {
-                x: Math.round((croppedAreaRelative.x / 100) * filteredImg.naturalWidth),
-                y: Math.round((croppedAreaRelative.y / 100) * filteredImg.naturalHeight),
-                width: Math.round((croppedAreaRelative.width / 100) * filteredImg.naturalWidth),
-                height: Math.round((croppedAreaRelative.height / 100) * filteredImg.naturalHeight),
-             };
-             console.log('Recalculated pixels:', cropPixelsForProcessing);
+        const clampCropAreaToBounds = (
+          area: { x: number; y: number; width: number; height: number },
+          imgWidth: number,
+          imgHeight: number
+        ) => {
+          const maxX = Math.max(0, imgWidth - area.width);
+          const maxY = Math.max(0, imgHeight - area.height);
+          const clampedX = Math.max(0, Math.min(area.x, maxX));
+          const clampedY = Math.max(0, Math.min(area.y, maxY));
+          const clampedWidth = Math.min(area.width, imgWidth - clampedX);
+          const clampedHeight = Math.min(area.height, imgHeight - clampedY);
+          return {
+            x: clampedX,
+            y: clampedY,
+            width: Math.max(1, clampedWidth),
+            height: Math.max(1, clampedHeight),
+          };
+        };
+
+        // Consolidate logic: prepare the source image (rotated if needed) before calculating crop area
+        let imageForCropping: HTMLImageElement = filteredImg;
+        let rotatedImageUrl: string | null = null;
+
+        if (rotation !== 0) {
+          console.log('Rotating filtered image before cropping:', rotation);
+          const rotatedBlob = await rotateImageWithCanvas(filteredImg, rotation);
+          const rotatedImg = new Image();
+          rotatedImg.crossOrigin = 'anonymous';
+          rotatedImageUrl = URL.createObjectURL(rotatedBlob);
+          rotatedImg.src = rotatedImageUrl;
+
+          await new Promise((resolve, reject) => {
+            rotatedImg.onload = () => {
+              console.log('Rotated image ready for cropping:', {
+                width: rotatedImg.naturalWidth,
+                height: rotatedImg.naturalHeight,
+              });
+              resolve(undefined);
+            };
+            rotatedImg.onerror = (error) => {
+              if (rotatedImageUrl) {
+                URL.revokeObjectURL(rotatedImageUrl);
+              }
+              reject(error);
+            };
+          });
+
+          imageForCropping = rotatedImg;
         }
 
-        // Apply aspect ratio constraint programmatically
-        // The cropper now allows free selection, but we need to enforce the panel aspect ratio
-        const finalCropArea = calculateAdjustedCropArea(
-          cropPixelsForProcessing,
-          filteredImg.naturalWidth,
-          filteredImg.naturalHeight
-        );
-        
-        console.log('Aspect ratio adjustment:', {
-          original: cropPixelsForProcessing,
-          adjusted: finalCropArea,
-          requiredAspectRatio: aspectRatioValue(),
-          originalAspectRatio: croppedAreaPixels.width / croppedAreaPixels.height,
-          adjustedAspectRatio: finalCropArea.width / finalCropArea.height,
-        });
+        // Convert relative crop percentages to absolute pixels for the image we're actually cropping
+        let cropAreaForImage = croppedAreaPixels;
+        if (croppedAreaRelative && imageForCropping.naturalWidth && imageForCropping.naturalHeight) {
+          console.log('Recalculating crop pixels relative to source image dimensions:', {
+            relative: croppedAreaRelative,
+            width: imageForCropping.naturalWidth,
+            height: imageForCropping.naturalHeight,
+          });
+          cropAreaForImage = {
+            x: Math.round((croppedAreaRelative.x / 100) * imageForCropping.naturalWidth),
+            y: Math.round((croppedAreaRelative.y / 100) * imageForCropping.naturalHeight),
+            width: Math.round((croppedAreaRelative.width / 100) * imageForCropping.naturalWidth),
+            height: Math.round((croppedAreaRelative.height / 100) * imageForCropping.naturalHeight),
+          };
+        } else {
+          console.warn('croppedAreaRelative missing; falling back to croppedAreaPixels which may be less accurate for rotated images.');
+        }
 
-        // Crop to the exact area selected, with aspect ratio enforced
-        // Use PNG for truly lossless quality (for archival and print quality)
-        // Note: croppedAreaPixels coordinates are relative to original image dimensions
-        // since we always use imageUrl in the Cropper component
-        console.log('Cropping filtered image with final crop area:', finalCropArea);
-        let croppedBlob = await cropImage(filteredImg, finalCropArea, undefined, 'png');
+        // Enforce required panel aspect ratio and ensure crop stays within bounds
+        const adjustedCropArea = calculateAdjustedCropArea(
+          cropAreaForImage,
+          imageForCropping.naturalWidth,
+          imageForCropping.naturalHeight
+        );
+
+        cropAreaForImage = clampCropAreaToBounds(
+          adjustedCropArea,
+          imageForCropping.naturalWidth,
+          imageForCropping.naturalHeight
+        );
+
+        console.log('Cropping image with adjusted crop area:', cropAreaForImage);
+        let croppedBlob = await cropImage(imageForCropping, cropAreaForImage, undefined, 'png');
         let fileExtension = 'png';
         let mimeType = 'image/png';
         
@@ -996,7 +1041,7 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
           
           // Fallback to JPEG with high quality (0.95)
           // This will likely reduce size by 90% while maintaining excellent visual quality
-          croppedBlob = await cropImage(filteredImg, finalCropArea, undefined, 'jpeg', 0.95);
+          croppedBlob = await cropImage(imageForCropping, cropAreaForImage, undefined, 'jpeg', 0.95);
           fileExtension = 'jpg';
           mimeType = 'image/jpeg';
           
@@ -1004,6 +1049,9 @@ export function ImageEditor({ imageUrl, imageId, onSave }: ImageEditorProps) {
         }
         
         // Revoke URL after image is used
+        if (rotatedImageUrl) {
+          URL.revokeObjectURL(rotatedImageUrl);
+        }
         URL.revokeObjectURL(filteredImgUrl);
         const timestamp = Date.now();
         

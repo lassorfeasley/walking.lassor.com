@@ -999,3 +999,62 @@ export async function generatePanelImages(
   return panels;
 }
 
+/**
+ * Rotate an image while preserving the white canvas background so the rotated
+ * output matches the visual appearance from react-easy-crop.
+ * @param image The source image element.
+ * @param rotation Rotation in degrees (positive = clockwise).
+ */
+export function rotateImageWithCanvas(
+  image: HTMLImageElement,
+  rotation: number
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      reject(new Error('Could not get canvas context'));
+      return;
+    }
+
+    const normalizedRotation = ((rotation % 360) + 360) % 360;
+    const radians = (normalizedRotation * Math.PI) / 180;
+
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+
+    if (width === 0 || height === 0) {
+      reject(new Error('Image has invalid dimensions'));
+      return;
+    }
+
+    const sin = Math.abs(Math.sin(radians));
+    const cos = Math.abs(Math.cos(radians));
+    const rotatedWidth = Math.ceil(width * cos + height * sin);
+    const rotatedHeight = Math.ceil(width * sin + height * cos);
+
+    canvas.width = rotatedWidth;
+    canvas.height = rotatedHeight;
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(radians);
+    ctx.translate(-width / 2, -height / 2);
+    ctx.drawImage(image, 0, 0);
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('Failed to create rotated image blob'));
+        }
+      },
+      'image/png'
+    );
+  });
+}
+
