@@ -13,10 +13,11 @@ export interface PanoramaImage {
   description: string; // Also used as Instagram caption
   date_taken: string; // ISO date string
   tags: string[];
-  status: 'draft' | 'ready' | 'posted' | 'private';
+  status: 'draft' | 'ready' | 'posted' | 'private' | 'archived';
   created_at?: string;
   updated_at?: string;
   posted_at?: string;
+  archived_at?: string;
   instagram_post_id?: string;
   adjustments?: ImageAdjustments;
 }

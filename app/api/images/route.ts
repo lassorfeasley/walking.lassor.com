@@ -27,10 +27,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data);
     }
 
-    // List all images (public read allowed by RLS)
+    // List all images (public read allowed by RLS, excludes archived)
     const { data, error } = await supabase
       .from('panorama_images')
       .select('*')
+      .neq('status', 'archived')
       .order('date_taken', { ascending: false });
 
     if (error) {

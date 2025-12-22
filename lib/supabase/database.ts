@@ -1,6 +1,5 @@
 import { createClient } from './browser';
 import { PanoramaImage, PanoramaPanel } from '@/types';
-import { deleteFile, RAW_BUCKET, PROCESSED_BUCKET } from './storage';
 
 /**
  * Fetch existing image metadata by ID
@@ -63,13 +62,14 @@ export async function getImageByUrl(imageUrl: string): Promise<PanoramaImage | n
 }
 
 /**
- * Fetch all images from database
+ * Fetch all images from database (excludes archived)
  */
 export async function getAllImages(): Promise<PanoramaImage[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('panorama_images')
     .select('*')
+    .neq('status', 'archived')
     .order('date_taken', { ascending: false });
 
   if (error) {
@@ -122,6 +122,7 @@ export async function getImagesPage({
   const { data, error } = await supabase
     .from('panorama_images')
     .select('*')
+    .neq('status', 'archived')
     .order('date_taken', { ascending: false })
     .order('id', { ascending: false })
     .range(rangeStart, rangeEnd);
@@ -454,131 +455,102 @@ export async function getPanelsByImageId(imageId: string): Promise<PanoramaPanel
 }
 
 /**
- * Extract file path from Supabase storage URL
- * Example: https://.../storage/v1/object/public/raw-panoramas/file.jpg -> file.jpg
+ * Archive an image (soft delete - sets status to 'archived')
+ * Images are never permanently deleted, only archived.
  */
-function extractStoragePath(url: string): { path: string; bucket: string } | null {
-  try {
-    const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('/');
-    
-    // Find the bucket name and path after /object/public/
-    const publicIndex = pathParts.indexOf('public');
-    if (publicIndex === -1 || publicIndex >= pathParts.length - 2) {
-      return null;
-    }
-    
-    const bucket = pathParts[publicIndex + 1];
-    const filePath = pathParts.slice(publicIndex + 2).join('/');
-    
-    return { path: filePath, bucket };
-  } catch (error) {
-    console.error('Error extracting storage path:', error);
-    return null;
-  }
-}
-
-/**
- * Delete an image and all related data (panels, tags, storage files)
- */
-export async function deleteImage(imageId: string): Promise<boolean> {
+export async function archiveImage(imageId: string): Promise<boolean> {
   try {
     const supabase = createClient()
-    // First, fetch the image metadata to get file URLs
-    const image = await getImageMetadata(imageId);
-    if (!image) {
-      console.error('Image not found');
-      return false;
-    }
-
-    // Fetch panels to get their URLs
-    const panels = await getPanelsByImageId(imageId);
-
-    // Collect all file URLs to delete
-    const filesToDelete: Array<{ url: string; bucket: string; path: string }> = [];
-
-    // Add original image URL
-    if (image.original_url) {
-      const extracted = extractStoragePath(image.original_url);
-      if (extracted) {
-        filesToDelete.push({ url: image.original_url, ...extracted });
-      }
-    }
-
-    // Add processed image URL
-    if (image.processed_url) {
-      const extracted = extractStoragePath(image.processed_url);
-      if (extracted) {
-        filesToDelete.push({ url: image.processed_url, ...extracted });
-      }
-    }
-
-    // Add thumbnail URL
-    if (image.thumbnail_url) {
-      const extracted = extractStoragePath(image.thumbnail_url);
-      if (extracted) {
-        filesToDelete.push({ url: image.thumbnail_url, ...extracted });
-      }
-    }
-
-    // Add preview URL
-    if (image.preview_url) {
-      const extracted = extractStoragePath(image.preview_url);
-      if (extracted) {
-        filesToDelete.push({ url: image.preview_url, ...extracted });
-      }
-    }
-
-    // Add all panel URLs
-    for (const panel of panels) {
-      if (panel.panel_url) {
-        const extracted = extractStoragePath(panel.panel_url);
-        if (extracted) {
-          filesToDelete.push({ url: panel.panel_url, ...extracted });
-        }
-      }
-    }
-
-    // Delete all storage files (continue even if some fail)
-    for (const file of filesToDelete) {
-      try {
-        await deleteFile(file.path, file.bucket);
-        console.log(`Deleted storage file: ${file.path} from ${file.bucket}`);
-      } catch (error) {
-        console.error(`Failed to delete storage file ${file.path}:`, error);
-        // Continue with other deletions
-      }
-    }
-
-    // Now delete database records
-    // Delete panels first (foreign key constraint)
-    await deletePanels(imageId);
-
-    // Delete image_tags relationships
-    const { error: tagsError } = await supabase
-      .from('image_tags')
-      .delete()
-      .eq('image_id', imageId);
-
-    if (tagsError) {
-      console.error('Error deleting image tags:', tagsError);
-      // Continue even if tags deletion fails
-    }
-
-    // Delete the main image record
-    const { error: imageError } = await supabase
+    
+    const { error } = await supabase
       .from('panorama_images')
-      .delete()
+      .update({
+        status: 'archived',
+        archived_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', imageId);
 
-    if (imageError) {
-      console.error('Error deleting image:', imageError);
+    if (error) {
+      console.error('Error archiving image:', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('Error in deleteImage:', error);
+    console.error('Error in archiveImage:', error);
     return false;
   }
+}
+
+/**
+ * Restore an archived image (sets status back to 'draft')
+ */
+export async function restoreImage(imageId: string): Promise<boolean> {
+  try {
+    const supabase = createClient()
+    
+    const { error } = await supabase
+      .from('panorama_images')
+      .update({
+        status: 'draft',
+        archived_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', imageId);
+
+    if (error) {
+      console.error('Error restoring image:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in restoreImage:', error);
+    return false;
+  }
+}
+
+/**
+ * Fetch paginated archived images
+ */
+export async function getArchivedImagesPage({
+  limit = 24,
+  offset = 0,
+}: GetImagesPageParams = {}): Promise<ImagesPageResult> {
+  const supabase = createClient()
+  const rangeStart = Math.max(0, offset);
+  const rangeEnd = rangeStart + Math.max(1, limit) - 1;
+
+  const { data, error } = await supabase
+    .from('panorama_images')
+    .select('*')
+    .eq('status', 'archived')
+    .order('archived_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(rangeStart, rangeEnd);
+
+  if (error) {
+    console.error('Error fetching archived images:', error);
+    return { images: [], hasMore: false };
+  }
+
+  if (!data || data.length === 0) {
+    return { images: [], hasMore: false };
+  }
+
+  const imagesWithTags = await Promise.all(
+    data.map(async (image) => {
+      const tagNames = await getImageTagNames(image.id);
+      return {
+        ...image,
+        tags: tagNames,
+      } as PanoramaImage;
+    })
+  );
+
+  return {
+    images: imagesWithTags,
+    hasMore: imagesWithTags.length === Math.max(1, limit),
+  };
 }

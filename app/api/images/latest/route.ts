@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from('panorama_images')
       .select('*')
+      .neq('status', 'archived')
       .order('created_at', { ascending: false })
       .limit(1);
 

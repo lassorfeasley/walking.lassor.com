@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText, Download, Trash2, Instagram, Info } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, MapPin, Calendar, Tag, FileText, Download, Archive, Instagram, Info } from 'lucide-react';
 import Link from 'next/link';
-import { getImageMetadata, getPanelsByImageId, deleteImage, saveImageMetadata } from '@/lib/supabase/database';
+import { getImageMetadata, getPanelsByImageId, archiveImage, saveImageMetadata } from '@/lib/supabase/database';
 import { useEffect, useState } from 'react';
 import { PanoramaImage, PanoramaPanel } from '@/types';
 import JSZip from 'jszip';
@@ -68,7 +68,7 @@ export default function PanoramaDetailPage({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [isGeneratingOptimized, setIsGeneratingOptimized] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [tokenWarning, setTokenWarning] = useState<string | null>(null)
@@ -187,29 +187,29 @@ export default function PanoramaDetailPage({
     );
   }
 
-  const handleDelete = async () => {
+  const handleArchive = async () => {
     if (!image) return;
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${image.title || 'this panorama'}"? This action cannot be undone.`
+      `Archive "${image.title || 'this panorama'}"? It will be hidden from all views but can be restored later.`
     );
 
     if (!confirmed) return;
 
-    setIsDeleting(true);
+    setIsArchiving(true);
     try {
-      const success = await deleteImage(image.id);
+      const success = await archiveImage(image.id);
       if (success) {
-        // Redirect to library after successful deletion
+        // Redirect to library after successful archive
         router.push('/library');
       } else {
-        alert('Failed to delete panorama. Please try again.');
+        alert('Failed to archive panorama. Please try again.');
       }
     } catch (error) {
-      console.error('Delete error:', error);
-      alert('Failed to delete panorama. Please try again.');
+      console.error('Archive error:', error);
+      alert('Failed to archive panorama. Please try again.');
     } finally {
-      setIsDeleting(false);
+      setIsArchiving(false);
     }
   };
 
@@ -741,13 +741,13 @@ export default function PanoramaDetailPage({
                 
                 <div className="border-t border-border mt-2 pt-2">
                   <Button
-                    variant="destructive"
+                    variant="secondary"
                     className="w-full"
-                    onClick={handleDelete}
-                    disabled={isDeleting}
+                    onClick={handleArchive}
+                    disabled={isArchiving}
                   >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {isDeleting ? 'Deleting...' : 'Delete Panorama'}
+                    <Archive className="mr-2 h-4 w-4" />
+                    {isArchiving ? 'Archiving...' : 'Archive Panorama'}
                   </Button>
                 </div>
               </div>

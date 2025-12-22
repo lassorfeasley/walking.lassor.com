@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Trash2, Instagram, Info } from 'lucide-react';
+import { ArrowLeft, Upload, Instagram, Info, Archive } from 'lucide-react';
 import Link from 'next/link';
-import { getImagesPage, deleteImage } from '@/lib/supabase/database';
+import { getImagesPage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 import { useRequireAuth } from '@/lib/auth-client';
 
@@ -65,7 +65,6 @@ export default function LibraryPage() {
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [postingId, setPostingId] = useState<string | null>(null);
   const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null)
   const [tokenWarning, setTokenWarning] = useState<string | null>(null)
@@ -218,32 +217,6 @@ export default function LibraryPage() {
     };
   }, [isAuthLoading, loadMoreImages]);
 
-  const handleDelete = async (imageId: string, imageTitle: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent navigation to detail page
-
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${imageTitle || 'this panorama'}"? This action cannot be undone.`
-    );
-
-    if (!confirmed) return;
-
-    setDeletingId(imageId);
-    try {
-      const success = await deleteImage(imageId);
-      if (success) {
-        // Remove from local state
-        setImages((prev) => prev.filter((img) => img.id !== imageId));
-      } else {
-        alert('Failed to delete panorama. Please try again.');
-      }
-    } catch (error) {
-      console.error('Delete error:', error);
-      alert('Failed to delete panorama. Please try again.');
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   // Conditional rendering after all hooks
   if (isAuthLoading) {
     return (
@@ -273,12 +246,20 @@ export default function LibraryPage() {
             Browse all your uploaded panoramas
           </p>
         </div>
-        <Link href="/upload">
-          <Button>
-            <Upload className="mr-2 h-4 w-4" />
-            Upload New
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/library/archive">
+            <Button variant="outline">
+              <Archive className="mr-2 h-4 w-4" />
+              Archive
+            </Button>
+          </Link>
+          <Link href="/upload">
+            <Button>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload New
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {tokenWarning ? (
@@ -338,15 +319,6 @@ export default function LibraryPage() {
                     unoptimized={false}
                   />
                   <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10" />
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                    onClick={(e) => handleDelete(image.id, image.title || '', e)}
-                    disabled={deletingId === image.id}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
                 </div>
                 <div className="p-3">
                   {image.title && (
