@@ -34,6 +34,7 @@ export default function InstagramTokenAdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [shortToken, setShortToken] = useState("")
+  const [appId, setAppId] = useState("")
   const [appSecret, setAppSecret] = useState("")
   const [exchangeUrl, setExchangeUrl] = useState<string | null>(null)
   
@@ -176,13 +177,15 @@ export default function InstagramTokenAdminPage() {
   }
 
   const buildExchangeUrl = () => {
-    if (!shortToken || !appSecret) {
+    if (!shortToken || !appId || !appSecret) {
       setExchangeUrl(null)
+      setError("Please fill in all fields: short-lived token, App ID, and App secret")
       return
     }
+    setError(null)
     const params = new URLSearchParams({
       grant_type: "fb_exchange_token",
-      client_id: "APP_ID",
+      client_id: appId.trim(),
       client_secret: appSecret.trim(),
       fb_exchange_token: shortToken.trim(),
     })
@@ -322,7 +325,7 @@ export default function InstagramTokenAdminPage() {
             .
           </p>
           <p>
-            2. Paste the app secret (find it on{" "}
+            2. Get your App ID and App Secret from{" "}
             <a
               href="https://developers.facebook.com/apps/1538979573913777/settings/basic/"
               target="_blank"
@@ -331,27 +334,39 @@ export default function InstagramTokenAdminPage() {
             >
               App Settings &gt; Basic
             </a>
-            ).
+            .
           </p>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="short-token">Short-lived token</Label>
               <textarea
                 id="short-token"
-                className="min-h-[120px] w-full rounded-md border bg-background p-2 text-xs"
+                className="min-h-[100px] w-full rounded-md border bg-background p-2 text-xs"
+                placeholder="Paste the short-lived token from Graph API Explorer..."
                 value={shortToken}
                 onChange={(e) => setShortToken(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="app-secret">App secret</Label>
-              <textarea
-                id="app-secret"
-                className="min-h-[120px] w-full rounded-md border bg-background p-2 text-xs"
-                placeholder="Paste the Facebook app secret here..."
-                value={appSecret}
-                onChange={(e) => setAppSecret(e.target.value)}
-              />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="app-id">App ID</Label>
+                <Input
+                  id="app-id"
+                  placeholder="e.g., 1538979573913777"
+                  value={appId}
+                  onChange={(e) => setAppId(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="app-secret">App Secret</Label>
+                <Input
+                  id="app-secret"
+                  type="password"
+                  placeholder="Paste the Facebook app secret here..."
+                  value={appSecret}
+                  onChange={(e) => setAppSecret(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           <Button type="button" onClick={buildExchangeUrl}>
