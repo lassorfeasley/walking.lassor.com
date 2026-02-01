@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { postToInstagram } from '@/lib/instagram/api'
+import { getAccessToken } from '@/lib/instagram/token'
 import { createClient } from '@/lib/supabase/server'
 import { PanoramaImage } from '@/types'
 
@@ -75,15 +76,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN
     const instagramBusinessAccountId =
       process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID
 
-    if (!accessToken || !instagramBusinessAccountId) {
+    if (!instagramBusinessAccountId) {
       return NextResponse.json(
         {
           error:
-            'Instagram integration not configured. Set INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_BUSINESS_ACCOUNT_ID.',
+            'Instagram integration not configured. Set INSTAGRAM_BUSINESS_ACCOUNT_ID.',
+        },
+        { status: 500 }
+      )
+    }
+
+    // Get access token from database (with auto-refresh) or env var fallback
+    const accessToken = await getAccessToken()
+
+    if (!accessToken) {
+      return NextResponse.json(
+        {
+          error:
+            'No Instagram access token available. Configure token in admin settings or set INSTAGRAM_ACCESS_TOKEN.',
         },
         { status: 500 }
       )

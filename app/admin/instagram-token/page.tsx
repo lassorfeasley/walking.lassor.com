@@ -6,12 +6,23 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { AlertCircle, Info } from "lucide-react"
-import { addDays, format, formatDistanceToNow } from "date-fns"
+import { AlertCircle, CheckCircle, Clock, RefreshCw, Upload } from "lucide-react"
+import { addDays, format } from "date-fns"
 
 interface CredentialStatus {
   last_refreshed_at: string
   refresher_note?: string
+  access_token?: string
+  expires_at?: string
+}
+
+interface TokenStatus {
+  hasToken: boolean
+  source: 'database' | 'environment' | null
+  expiresAt: string | null
+  daysUntilExpiration: number | null
+  isExpiringSoon: boolean
+  isValid: boolean
 }
 
 export default function InstagramTokenAdminPage() {
@@ -21,9 +32,31 @@ export default function InstagramTokenAdminPage() {
   const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [shortToken, setShortToken] = useState("")
   const [appSecret, setAppSecret] = useState("")
   const [exchangeUrl, setExchangeUrl] = useState<string | null>(null)
+  
+  // New state for token management
+  const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null)
+  const [loadingTokenStatus, setLoadingTokenStatus] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [importing, setImporting] = useState(false)
+
+  // Load token status
+  const loadTokenStatus = async () => {
+    try {
+      const response = await fetch("/api/admin/instagram-token/refresh")
+      const payload = await response.json()
+      if (response.ok) {
+        setTokenStatus(payload)
+      }
+    } catch (err) {
+      console.error("Failed to load token status:", err)
+    } finally {
+      setLoadingTokenStatus(false)
+    }
+  }
 
   useEffect(() => {
     const loadStatus = async () => {
@@ -50,7 +83,67 @@ export default function InstagramTokenAdminPage() {
     }
 
     loadStatus()
+    loadTokenStatus()
   }, [])
+
+  const handleRefreshToken = async () => {
+    setRefreshing(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const response = await fetch("/api/admin/instagram-token/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to refresh token")
+      }
+      setSuccess("Token refreshed successfully! New expiration: " + 
+        (payload.expiresAt ? format(new Date(payload.expiresAt), "PPP") : "60 days from now"))
+      await loadTokenStatus()
+      // Reload history to show the new entry
+      const statusResponse = await fetch("/api/admin/instagram-token/status")
+      const statusPayload = await statusResponse.json()
+      if (statusResponse.ok && statusPayload.credentials) {
+        setHistory(statusPayload.credentials)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to refresh token")
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const handleImportFromEnv = async () => {
+    setImporting(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const response = await fetch("/api/admin/instagram-token/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ importFromEnv: true }),
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to import token")
+      }
+      setSuccess("Token imported and refreshed successfully!")
+      await loadTokenStatus()
+      // Reload history
+      const statusResponse = await fetch("/api/admin/instagram-token/status")
+      const statusPayload = await statusResponse.json()
+      if (statusResponse.ok && statusPayload.credentials) {
+        setHistory(statusPayload.credentials)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import token")
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!refreshDate) {
@@ -59,6 +152,7 @@ export default function InstagramTokenAdminPage() {
     }
     setSaving(true)
     setError(null)
+    setSuccess(null)
     try {
       const response = await fetch("/api/admin/instagram-token/status", {
         method: "POST",
@@ -73,6 +167,7 @@ export default function InstagramTokenAdminPage() {
         throw new Error(payload.error || "Failed to save status")
       }
       setHistory([payload.credential, ...history])
+      setSuccess("Refresh date saved.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save status")
     } finally {
@@ -96,11 +191,122 @@ export default function InstagramTokenAdminPage() {
     )
   }
 
+  const getStatusColor = () => {
+    if (!tokenStatus?.hasToken) return "bg-gray-100 text-gray-700"
+    if (!tokenStatus.isValid) return "bg-red-100 text-red-700"
+    if (tokenStatus.isExpiringSoon) return "bg-yellow-100 text-yellow-700"
+    return "bg-green-100 text-green-700"
+  }
+
+  const getStatusIcon = () => {
+    if (!tokenStatus?.hasToken) return <AlertCircle className="h-5 w-5" />
+    if (!tokenStatus.isValid) return <AlertCircle className="h-5 w-5" />
+    if (tokenStatus.isExpiringSoon) return <Clock className="h-5 w-5" />
+    return <CheckCircle className="h-5 w-5" />
+  }
+
+  const getStatusText = () => {
+    if (!tokenStatus?.hasToken) return "No token configured"
+    if (!tokenStatus.isValid) return "Token is invalid or expired"
+    if (tokenStatus.isExpiringSoon) {
+      return `Token expiring soon (${tokenStatus.daysUntilExpiration} days left)`
+    }
+    return `Token valid (${tokenStatus.daysUntilExpiration} days until expiration)`
+  }
+
   return (
     <div className="container mx-auto px-4 py-10 space-y-6">
+      {/* Token Status Card - NEW */}
       <Card>
         <CardHeader>
-          <CardTitle>Long-lived token URL builder</CardTitle>
+          <CardTitle>Token Status</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loadingTokenStatus ? (
+            <p className="text-sm text-muted-foreground">Loading token status...</p>
+          ) : (
+            <>
+              <div className={`flex items-center gap-3 p-4 rounded-lg ${getStatusColor()}`}>
+                {getStatusIcon()}
+                <div>
+                  <p className="font-medium">{getStatusText()}</p>
+                  {tokenStatus?.source && (
+                    <p className="text-sm opacity-80">
+                      Source: {tokenStatus.source === 'database' ? 'Database (auto-refresh enabled)' : 'Environment variable'}
+                    </p>
+                  )}
+                  {tokenStatus?.expiresAt && (
+                    <p className="text-sm opacity-80">
+                      Expires: {format(new Date(tokenStatus.expiresAt), "PPP 'at' p")}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 rounded-md bg-rose-100 p-3 text-sm text-rose-900">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  {error}
+                </div>
+              )}
+
+              {success && (
+                <div className="flex items-center gap-2 rounded-md bg-green-100 p-3 text-sm text-green-900">
+                  <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                  {success}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-3">
+                {tokenStatus?.hasToken && tokenStatus?.isValid && (
+                  <Button 
+                    onClick={handleRefreshToken} 
+                    disabled={refreshing}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    {refreshing ? "Refreshing..." : "Refresh Token Now"}
+                  </Button>
+                )}
+
+                {(!tokenStatus?.hasToken || tokenStatus?.source === 'environment') && (
+                  <Button 
+                    onClick={handleImportFromEnv} 
+                    disabled={importing}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {importing ? "Importing..." : "Import from Environment Variable"}
+                  </Button>
+                )}
+              </div>
+
+              {tokenStatus?.source === 'database' && (
+                <p className="text-sm text-muted-foreground">
+                  Your token is stored in the database and will be automatically refreshed 
+                  when it&apos;s within 7 days of expiring.
+                </p>
+              )}
+
+              {tokenStatus?.source === 'environment' && (
+                <p className="text-sm text-muted-foreground">
+                  Your token is stored in environment variables. Click &quot;Import from Environment Variable&quot; 
+                  to move it to the database for automatic refresh.
+                </p>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Manual Token Setup - for initial setup or recovery */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Manual Token Setup</CardTitle>
+          <p className="text-muted-foreground text-sm">
+            Only needed if you need to create a new token from scratch (e.g., after token expires completely).
+          </p>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <p>
@@ -165,27 +371,25 @@ export default function InstagramTokenAdminPage() {
                   Open exchange URL in new tab
                 </a>
               </Button>
+              <p className="text-xs text-muted-foreground">
+                After getting the long-lived token, add it to your INSTAGRAM_ACCESS_TOKEN 
+                environment variable, then click &quot;Import from Environment Variable&quot; above.
+              </p>
             </div>
           ) : null}
         </CardContent>
       </Card>
 
+      {/* Manual date tracking - legacy, kept for reference */}
       <Card>
         <CardHeader>
-          <CardTitle>Mark token refreshed</CardTitle>
+          <CardTitle>Manual Refresh Tracking</CardTitle>
           <p className="text-muted-foreground text-sm">
-            Use this form immediately after pasting the new long-lived token into
-            your environment variables. We’ll remind you 10 days before the next
-            refresh window.
+            Legacy: Use this only if you need to manually track token refresh dates 
+            without using the automatic system.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {error ? (
-            <div className="flex items-center gap-2 rounded-md bg-rose-100 p-3 text-sm text-rose-900">
-              <AlertCircle className="h-4 w-4" />
-              {error}
-            </div>
-          ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="refresh-date">Token refreshed on</Label>
@@ -207,18 +411,18 @@ export default function InstagramTokenAdminPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving} variant="outline">
               {saving ? "Saving..." : "Save refresh date"}
             </Button>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => {
                 setRefreshDate(new Date().toISOString().slice(0, 10))
                 setNote("")
               }}
             >
-              Mark as today
+              Set to today
             </Button>
           </div>
         </CardContent>
@@ -227,24 +431,30 @@ export default function InstagramTokenAdminPage() {
       {history.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Refresh history</CardTitle>
+            <CardTitle>Refresh History</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {history.map((entry) => (
+            {history.map((entry, index) => (
               <div
-                key={entry.last_refreshed_at}
+                key={`${entry.last_refreshed_at}-${index}`}
                 className="rounded-lg border p-3 text-sm"
               >
                 <p className="font-medium">
                   {format(new Date(entry.last_refreshed_at), "PPP")}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Next due:{" "}
-                  {format(
-                    addDays(new Date(entry.last_refreshed_at), 60),
-                    "PPP"
-                  )}
-                </p>
+                {entry.expires_at ? (
+                  <p className="text-xs text-muted-foreground">
+                    Expires: {format(new Date(entry.expires_at), "PPP")}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Next due (estimated):{" "}
+                    {format(
+                      addDays(new Date(entry.last_refreshed_at), 60),
+                      "PPP"
+                    )}
+                  </p>
+                )}
                 {entry.refresher_note ? (
                   <p className="text-xs text-muted-foreground mt-1">
                     {entry.refresher_note}
@@ -258,4 +468,3 @@ export default function InstagramTokenAdminPage() {
     </div>
   )
 }
-
