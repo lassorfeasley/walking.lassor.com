@@ -75,6 +75,14 @@ export default function Home() {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const nextOffsetRef = useRef(0);
 
+  // Check for password recovery tokens and redirect to reset-password page
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes('type=recovery')) {
+      router.push(`/reset-password${hash}`);
+    }
+  }, [router]);
+
   const loadMoreImages = useCallback(async () => {
     if (isFetchingMore || !hasMore) return;
     setIsFetchingMore(true);
