@@ -344,8 +344,8 @@ export default function PublicPanoramaPage({
           {' → '}
           {image.title}
         </div>
-        <div className="flex justify-start items-end gap-2">
-          <Link href="/explore" className="justify-start text-neutral-400 text-base font-black cursor-pointer hover:text-neutral-600 transition-colors">
+        <div className="flex justify-start items-center gap-2">
+          <Link href="/explore" className="flex items-center text-neutral-400 text-base font-black cursor-pointer hover:text-neutral-600 transition-colors">
             <i className="fas fa-globe"></i>
           </Link>
           <SearchDialog />
