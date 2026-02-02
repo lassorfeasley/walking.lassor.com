@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Search } from "lucide-react";
 
 interface SearchDialogProps {
   /** Optional callback to run after search completes */
@@ -30,9 +31,9 @@ export function SearchDialog({ onSearch }: SearchDialogProps) {
         <button
           type="button"
           aria-label="Open search"
-          className="justify-start text-neutral-400 text-base font-black cursor-pointer hover:text-neutral-600 transition-colors"
+          className="flex items-center text-neutral-400 cursor-pointer hover:text-neutral-600 transition-colors"
         >
-          <i className="fas fa-search"></i>
+          <Search size={16} strokeWidth={2.5} />
         </button>
       </DialogTrigger>
       <DialogContent
@@ -45,8 +46,8 @@ export function SearchDialog({ onSearch }: SearchDialogProps) {
             <div className="text-neutral-700 text-base font-light leading-tight font-[var(--font-be-vietnam-pro)]">Search</div>
             <form onSubmit={handleSubmit} className="w-full" role="search">
               <div className="w-full p-2.5 bg-white outline outline-1 outline-offset-[-1px] outline-neutral-300 inline-flex justify-start items-center gap-2.5">
-                <span className="text-neutral-700 text-base font-black leading-none">
-                  <i className="fas fa-search" aria-hidden="true"></i>
+                <span className="text-neutral-700 leading-none">
+                  <Search size={16} strokeWidth={2.5} aria-hidden="true" />
                 </span>
                 <input
                   type="search"

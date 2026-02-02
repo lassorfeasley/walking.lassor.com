@@ -7,6 +7,7 @@ import { getImagesPage } from '@/lib/supabase/database';
 import { PanoramaImage } from '@/types';
 import { format } from 'date-fns';
 import { SearchDialog } from '@/components/SearchDialog';
+import { CloudUpload } from 'lucide-react';
 
 const PANEL_HEIGHT = 1080;
 const PANEL_BLOCK_RATIO = 0.1685;
@@ -216,12 +217,9 @@ export default function Home() {
           Walking forward
         </div>
           <div className="flex justify-start items-center gap-2">
-          <Link href="/signin" className="justify-start text-neutral-400 text-base font-black cursor-pointer hover:text-neutral-600 transition-colors">
-            <i className="fas fa-arrow-up"></i>
-          </Link>
-          <div className="justify-start text-neutral-400 text-base font-black">
+          <Link href="/explore" className="justify-start text-neutral-400 text-base font-black cursor-pointer hover:text-neutral-600 transition-colors">
             <i className="fas fa-globe"></i>
-          </div>
+          </Link>
             <SearchDialog />
         </div>
       </div>
@@ -355,18 +353,23 @@ export default function Home() {
 
         {/* Footer */}
         <div className="self-stretch flex flex-col justify-start items-center">
-          <div className="self-stretch h-36 px-3 pt-3 pb-24 border-t border-neutral-300 inline-flex flex-col justify-start items-start gap-2">
-            <div className="self-stretch min-w-36 justify-start text-neutral-500 text-[10px] font-bold font-[var(--font-be-vietnam-pro)]">
-              Developed by Lassor
-            </div>
-            <div className="self-stretch flex flex-col justify-start items-start gap-1">
-              <div className="self-stretch justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
-                www.Lassor.com
+          <div className="self-stretch h-36 px-3 pt-3 pb-24 border-t border-neutral-300 inline-flex justify-between items-start gap-2">
+            <div className="flex flex-col justify-start items-start gap-2">
+              <div className="self-stretch min-w-36 justify-start text-neutral-500 text-[10px] font-bold font-[var(--font-be-vietnam-pro)]">
+                Developed by Lassor
               </div>
-              <div className="w-56 justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
-                Feasley@Lassor.com
+              <div className="self-stretch flex flex-col justify-start items-start gap-1">
+                <div className="self-stretch justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
+                  www.Lassor.com
+                </div>
+                <div className="w-56 justify-start text-neutral-500 text-[10px] font-normal font-[var(--font-be-vietnam-pro)]">
+                  Feasley@Lassor.com
+                </div>
               </div>
             </div>
+            <Link href="/signin" className="text-neutral-400 cursor-pointer hover:text-neutral-600 transition-colors">
+              <CloudUpload size={18} strokeWidth={2} />
+            </Link>
           </div>
         </div>
       </div>
